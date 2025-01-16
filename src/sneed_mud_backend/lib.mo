@@ -204,6 +204,13 @@ module {
               case (?room) {
                 state.playerLocations.put(caller, starting_room);
                 broadcastToRoomExcept(state, starting_room, caller, name # " has entered the game");
+                
+                // List other players in the room
+                let otherPlayers = getPlayersInRoomExcept(state, starting_room, caller);
+                if (otherPlayers.size() > 0) {
+                  addMessageToLog(state, caller, formatPlayerList(otherPlayers));
+                };
+                
                 return #ok("Successfully registered as " # name # " and entered the starting room");
               };
               case null {
@@ -245,6 +252,39 @@ module {
     };
   };
 
+  // Helper function to format a list of players
+  private func formatPlayerList(names: [Text]) : Text {
+    switch (names.size()) {
+      case 0 { "" };
+      case 1 { names[0] # " is here" };
+      case 2 { names[0] # " and " # names[1] # " are here" };
+      case _ {
+        let last = names.size() - 1;
+        var result = "";
+        var i = 0;
+        while (i < last - 1) {
+          result := result # names[i] # ", ";
+          i += 1;
+        };
+        result # names[last - 1] # " and " # names[last] # " are here"
+      };
+    };
+  };
+
+  // Helper function to get list of players in a room except one player
+  private func getPlayersInRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal) : [Text] {
+    let players = Buffer.Buffer<Text>(0);
+    for ((principal, location) in state.playerLocations.entries()) {
+      if (location == roomId and principal != excludePrincipal) {
+        switch (state.players.get(principal)) {
+          case (?name) { players.add(name) };
+          case null {}; // Skip players without names
+        };
+      };
+    };
+    Buffer.toArray(players)
+  };
+
   public func useExit(state: MudState, caller: Principal, exitId: Text) : Result.Result<Room, Text> {
     // Check if player is registered
     switch (state.players.get(caller)) {
@@ -271,6 +311,12 @@ module {
                     // Send arrival messages
                     broadcastToRoomExcept(state, targetRoom.id, caller, playerName # " arrives from " # currentRoom.name);
                     addMessageToLog(state, caller, "You arrive in " # targetRoom.name);
+                    
+                    // List other players in the room
+                    let otherPlayers = getPlayersInRoomExcept(state, targetRoom.id, caller);
+                    if (otherPlayers.size() > 0) {
+                      addMessageToLog(state, caller, formatPlayerList(otherPlayers));
+                    };
                     
                     return #ok(targetRoom);
                   };
