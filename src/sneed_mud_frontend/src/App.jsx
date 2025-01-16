@@ -52,7 +52,7 @@ function App() {
     try {
       // Convert lastMessageId to array format for Motoko
       const lastIdParam = lastMessageId === null ? [] : [lastMessageId];
-      console.log("Fetching messages after:", lastIdParam, "lastMessageId:", lastMessageId?.toString());
+      // console.log("Fetching messages after:", lastIdParam, "lastMessageId:", lastMessageId?.toString());
       
       const newMessages = await authenticatedActor.getMessages(lastIdParam);
       if (newMessages.length > 0) {
@@ -68,7 +68,7 @@ function App() {
           // Store the new ID directly as a BigInt
           const newLastId = BigInt(uniqueNewMessages[uniqueNewMessages.length - 1].id);
           if (newLastId > currentLastId) {  // Only update if we actually have a newer message
-            console.log("Updating lastMessageId from", currentLastId.toString(), "to", newLastId.toString());
+            // console.log("Updating lastMessageId from", currentLastId.toString(), "to", newLastId.toString());
             setLastMessageId(newLastId);
           }
         }
@@ -98,20 +98,30 @@ function App() {
   }
 
   async function handleCommand(command) {
-    const lowerCommand = command.toLowerCase();
-    if (lowerCommand.startsWith('go ')) {
-      const exitId = lowerCommand.substring(3).trim();
-      try {
-        const result = await authenticatedActor.useExit(exitId);
-        if ('ok' in result) {
-          // First update messages to get the exit messages
-          await fetchMessages();
-          // Then update room state
-          await updateCurrentRoom();
-        }
-      } catch (error) {
-        console.error("Error executing command:", error);
+    // Extract exitId from either a raw exitId or a 'go' command
+    let exitId = command;
+    if (command.toLowerCase().startsWith('go ')) {
+      exitId = command.substring(3).trim();
+    }
+
+    try {
+      console.log("Attempting to use exit:", exitId);
+      const result = await authenticatedActor.useExit(exitId);
+      if ('ok' in result) {
+        console.log("Successfully used exit");
+        // First update messages to get the exit messages
+        await fetchMessages();
+        // Then update room state
+        await updateCurrentRoom();
+      } else if ('err' in result) {
+        console.error("Error using exit:", result.err);
+        // Add error message to the game log
+        setMessages(prev => [...prev, `Error: ${result.err}`]);
       }
+    } catch (error) {
+      console.error("Error executing command:", error);
+      // Add error message to the game log
+      setMessages(prev => [...prev, `Error: Failed to use exit - ${error.message || 'Unknown error'}`]);
     }
   }
 

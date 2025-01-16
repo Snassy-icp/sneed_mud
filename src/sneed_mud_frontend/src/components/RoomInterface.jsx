@@ -11,18 +11,26 @@ const RoomInterface = ({ onCommand, currentRoom }) => {
     }
   };
 
+  console.log("Current room exits:", currentRoom?.exits);
+
   return (
     <div className="room-interface">
       <div className="available-exits">
-        {currentRoom?.exits?.map(([exitId, exit]) => (
-          <button 
-            key={exitId}
-            className="exit-button"
-            onClick={() => onCommand(`go ${exitId}`)}
-          >
-            {exit.name}
-          </button>
-        ))}
+        {currentRoom?.exits?.map(([exitId, exit]) => {
+          console.log("Rendering exit:", { exitId, name: exit.name });
+          return (
+            <button 
+              key={exitId}
+              className="exit-button"
+              onClick={() => {
+                console.log("Clicked exit with ID:", exitId);
+                onCommand(exitId);
+              }}
+            >
+              {exit.name}
+            </button>
+          );
+        })}
       </div>
       <form onSubmit={handleSubmit} className="command-form">
         <input
