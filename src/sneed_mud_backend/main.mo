@@ -33,6 +33,21 @@ actor {
     Lib.createRoom(state, name, description)
   };
 
+  public shared(msg) func updateRoom(roomId: RoomId, name: Text, description: Text) : async Result.Result<(), Text> {
+    Lib.updateRoom(state, roomId, name, description)
+  };
+
+  public shared(msg) func updateExit(
+    fromRoomId: RoomId,
+    exitId: Text,
+    name: Text,
+    description: Text,
+    targetRoomId: RoomId,
+    direction: ?Text
+  ) : async Result.Result<(), Text> {
+    Lib.updateExit(state, fromRoomId, exitId, name, description, targetRoomId, direction)
+  };
+
   public shared(msg) func addExit(
     fromRoomId: RoomId, 
     exitId: Text,

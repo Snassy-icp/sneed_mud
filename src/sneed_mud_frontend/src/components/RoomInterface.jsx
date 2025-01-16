@@ -24,7 +24,7 @@ const RoomInterface = ({ onCommand, currentRoom }) => {
               className="exit-button"
               onClick={() => {
                 console.log("Clicked exit with ID:", exitId);
-                onCommand(exitId);
+                onCommand(`/go ${exitId}`);
               }}
             >
               {exit.name}
@@ -37,7 +37,7 @@ const RoomInterface = ({ onCommand, currentRoom }) => {
           type="text"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
-          placeholder="Enter command..."
+          placeholder="Enter command... (/say, /whisper, /go)"
           className="command-input"
         />
         <button type="submit" className="command-button">Send</button>

@@ -127,6 +127,76 @@ module {
     #ok(roomId)
   };
 
+  public func updateRoom(state: MudState, roomId: RoomId, name: Text, description: Text) : Result.Result<(), Text> {
+    switch (state.rooms.get(roomId)) {
+      case null { #err("Room not found") };
+      case (?room) {
+        let updatedRoom : Room = {
+          id = room.id;
+          name = name;
+          description = description;
+          exits = room.exits;
+        };
+        state.rooms.put(roomId, updatedRoom);
+        #ok(())
+      };
+    };
+  };
+
+  public func updateExit(
+    state: MudState,
+    fromRoomId: RoomId,
+    exitId: Text,
+    name: Text,
+    description: Text,
+    targetRoomId: RoomId,
+    direction: ?Text
+  ) : Result.Result<(), Text> {
+    switch (state.rooms.get(fromRoomId)) {
+      case null { #err("Source room not found") };
+      case (?room) {
+        switch (state.rooms.get(targetRoomId)) {
+          case null { #err("Target room not found") };
+          case (?_) {
+            // Find and update the specific exit
+            let existingExits = Buffer.Buffer<(Text, Exit)>(room.exits.size());
+            var exitFound = false;
+
+            for ((id, exit) in room.exits.vals()) {
+              if (id == exitId) {
+                // Update this exit
+                let updatedExit : Exit = {
+                  name = name;
+                  description = description;
+                  targetRoomId = targetRoomId;
+                  direction = direction;
+                };
+                existingExits.add((exitId, updatedExit));
+                exitFound := true;
+              } else {
+                existingExits.add((id, exit));
+              };
+            };
+
+            if (not exitFound) {
+              return #err("Exit not found");
+            };
+
+            let updatedRoom : Room = {
+              id = room.id;
+              name = room.name;
+              description = room.description;
+              exits = Buffer.toArray(existingExits);
+            };
+
+            state.rooms.put(fromRoomId, updatedRoom);
+            #ok(())
+          };
+        };
+      };
+    };
+  };
+
   public func addExit(
     state: MudState,
     fromRoomId: RoomId, 
@@ -294,9 +364,10 @@ module {
         switch (getCurrentRoom(state, caller)) {
           case (#err(e)) { return #err(e) };
           case (#ok(currentRoom)) {
-            // Find the exit
+            // Find the exit (case-insensitive comparison)
+            let lowerExitId = Text.toLowercase(exitId);
             for ((id, exit) in currentRoom.exits.vals()) {
-              if (id == exitId) {
+              if (Text.toLowercase(id) == lowerExitId) {
                 // Found the exit, try to move to target room
                 switch (state.rooms.get(exit.targetRoomId)) {
                   case null { return #err("Target room not found") };
