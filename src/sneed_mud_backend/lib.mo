@@ -57,7 +57,7 @@ module {
     };
   };
 
-  public func getMessagesInternal(state: MudState, caller: Principal, afterId: ?MessageId) : [LogMessage] {
+  public func getMessages(state: MudState, caller: Principal, afterId: ?MessageId) : [LogMessage] {
     Debug.print("Getting messages for principal: " # Principal.toText(caller));
     
     switch (state.messageLogs.get(caller)) {
@@ -209,7 +209,7 @@ module {
   };
 
   // Private helper to get current room with fallback logic
-  public func getCurrentRoomInternal(state: MudState, caller: Principal) : Result.Result<Room, Text> {
+  public func getCurrentRoom(state: MudState, caller: Principal) : Result.Result<Room, Text> {
     switch (state.playerLocations.get(caller)) {
       case null { 
         // Player not in any room, try to use starting room
@@ -237,13 +237,13 @@ module {
     };
   };
 
-  public func useExitInternal(state: MudState, caller: Principal, exitId: Text) : Result.Result<Room, Text> {
+  public func useExit(state: MudState, caller: Principal, exitId: Text) : Result.Result<Room, Text> {
     // Check if player is registered
     switch (state.players.get(caller)) {
       case null { return #err("You need to register a name first") };
       case (?playerName) {
         // Get player's current room
-        switch (getCurrentRoomInternal(state, caller)) {
+        switch (getCurrentRoom(state, caller)) {
           case (#err(e)) { return #err(e) };
           case (#ok(currentRoom)) {
             // Find the exit

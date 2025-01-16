@@ -22,11 +22,11 @@ actor {
   };
 
   public query(msg) func getMessages(afterId: ?MessageId) : async [LogMessage] {
-    Lib.getMessagesInternal(state, msg.caller, afterId)
+    Lib.getMessages(state, msg.caller, afterId)
   };
 
   public query func test_getMessages(principal : Principal, afterId: ?MessageId) : async [LogMessage] {
-    Lib.getMessagesInternal(state, principal, afterId)
+    Lib.getMessages(state, principal, afterId)
   };
 
   public shared(msg) func createRoom(name: Text, description: Text) : async Result.Result<RoomId, Text> {
@@ -70,15 +70,15 @@ actor {
   };
 
   public query(msg) func getCurrentRoom() : async Result.Result<Room, Text> {
-    Lib.getCurrentRoomInternal(state, msg.caller)
+    Lib.getCurrentRoom(state, msg.caller)
   };
 
   public shared(msg) func useExit(exitId: Text) : async Result.Result<Room, Text> {
-    Lib.useExitInternal(state, msg.caller, exitId)
+    Lib.useExit(state, msg.caller, exitId)
   };
 
   public shared(msg) func test_useExit(principal : Principal, exitId: Text) : async Result.Result<Room, Text> {
-    Lib.useExitInternal(state, principal, exitId)
+    Lib.useExit(state, principal, exitId)
   };
 
   public shared(msg) func getPlayersInRoom(roomId: RoomId) : async Result.Result<[(Principal, Text)], Text> {
