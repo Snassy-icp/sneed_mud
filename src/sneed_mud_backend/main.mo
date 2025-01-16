@@ -8,20 +8,68 @@ import Debug "mo:base/Debug";
 import Nat "mo:base/Nat";
 import Hash "mo:base/Hash";
 import Array "mo:base/Array";
-import Option "mo:base/Option";
+import Time "mo:base/Time";
 import Types "./Types";
 
 actor {
   type Room = Types.Room;
   type RoomId = Types.RoomId;
   type Exit = Types.Exit;
+  type LogMessage = Types.LogMessage;
+  type MessageId = Types.MessageId;
+  type CircularBuffer<T> = Types.CircularBuffer<T>;
+
+  let MESSAGE_BUFFER_SIZE = 1000;
+
+  // Helper functions for circular buffer
+  private func createCircularBuffer<T>() : CircularBuffer<T> {
+    {
+      var buffer = Array.init<?T>(MESSAGE_BUFFER_SIZE, null);
+      var start = 0;
+      var size = 0;
+      var highestId = null;
+    }
+  };
+
+  private func addToCircularBuffer<T>(cb: CircularBuffer<T>, value: T) {
+    let index = (cb.start + cb.size) % MESSAGE_BUFFER_SIZE;
+    cb.buffer[index] := ?value;
+    
+    if (cb.size < MESSAGE_BUFFER_SIZE) {
+      cb.size += 1;
+    } else {
+      cb.start := (cb.start + 1) % MESSAGE_BUFFER_SIZE;
+    };
+  };
+
+  private func getFromCircularBuffer<T>(cb: CircularBuffer<T>, startIndex: Nat, count: Nat) : [T] {
+    let result = Buffer.Buffer<T>(count);
+    var i = 0;
+    while (i < count and i < cb.size) {
+      let index = (cb.start + i) % MESSAGE_BUFFER_SIZE;
+      switch (cb.buffer[index]) {
+        case (?value) { result.add(value); };
+        case null {};
+      };
+      i += 1;
+    };
+    Buffer.toArray(result)
+  };
+
+  private func getLastNFromCircularBuffer<T>(cb: CircularBuffer<T>, n: Nat) : [T] {
+    let count = if (cb.size < n) { cb.size } else { n };
+    let startIndex = cb.size - count;
+    getFromCircularBuffer(cb, startIndex, count)
+  };
 
   // Stable storage
   private stable var playerEntries : [(Principal, Text)] = [];
   private stable var roomEntries : [(RoomId, Room)] = [];
   private stable var playerLocationEntries : [(Principal, RoomId)] = [];
+  private stable var messageLogEntries : [(Principal, [LogMessage])] = [];
 
   private stable var nextRoomId : Nat = 0;
+  private stable var nextMessageId : MessageId = 0;
 
   // Runtime state
   private var players = HashMap.fromIter<Principal, Text>(playerEntries.vals(), 100, Principal.equal, Principal.hash);
@@ -36,6 +84,16 @@ actor {
   );
   private var rooms = HashMap.fromIter<RoomId, Room>(roomEntries.vals(), 100, Nat.equal, Hash.hash);
   private var playerLocations = HashMap.fromIter<Principal, RoomId>(playerLocationEntries.vals(), 100, Principal.equal, Principal.hash);
+  private var messageLogs = HashMap.HashMap<Principal, CircularBuffer<LogMessage>>(100, Principal.equal, Principal.hash);
+
+  // Initialize message logs from stable storage
+  for ((principal, messages) in messageLogEntries.vals()) {
+    let cb = createCircularBuffer<LogMessage>();
+    for (msg in messages.vals()) {
+      addToCircularBuffer(cb, msg);
+    };
+    messageLogs.put(principal, cb);
+  };
 
   let starting_room : RoomId = 0;
 
@@ -44,13 +102,159 @@ actor {
     playerEntries := Iter.toArray(players.entries());
     roomEntries := Iter.toArray(rooms.entries());
     playerLocationEntries := Iter.toArray(playerLocations.entries());
+    messageLogEntries := Array.map<(Principal, CircularBuffer<LogMessage>), (Principal, [LogMessage])>(
+      Iter.toArray(messageLogs.entries()),
+      func ((p, cb) : (Principal, CircularBuffer<LogMessage>)) : (Principal, [LogMessage]) {
+        (p, getFromCircularBuffer(cb, 0, cb.size))
+      }
+    );
   };
 
   system func postupgrade() {
-    // Clear stable storage after initializing HashMaps
     playerEntries := [];
     roomEntries := [];
     playerLocationEntries := [];
+    messageLogEntries := [];
+  };
+
+  // Message buffer specific functions
+  private type MessageBuffer = {
+    var buffer: [var ?LogMessage];
+    var start: Nat;
+    var size: Nat;
+    var highestId: ?MessageId;
+  };
+
+  private func createMessageBuffer() : MessageBuffer {
+    {
+      var buffer = Array.init<?LogMessage>(MESSAGE_BUFFER_SIZE, null);
+      var start = 0;
+      var size = 0;
+      var highestId = null;
+    }
+  };
+
+  private func addMessageToBuffer(mb: MessageBuffer, msg: LogMessage) {
+    let index = (mb.start + mb.size) % MESSAGE_BUFFER_SIZE;
+    mb.buffer[index] := ?msg;
+    mb.highestId := ?msg.id;
+    
+    if (mb.size < MESSAGE_BUFFER_SIZE) {
+      mb.size += 1;
+    } else {
+      mb.start := (mb.start + 1) % MESSAGE_BUFFER_SIZE;
+    };
+  };
+
+  private func getMessagesFromBuffer(mb: MessageBuffer, startIndex: Nat, count: Nat) : [LogMessage] {
+    let result = Buffer.Buffer<LogMessage>(count);
+    var i = 0;
+    while (i < count and i < mb.size) {
+      let index = (mb.start + i) % MESSAGE_BUFFER_SIZE;
+      switch (mb.buffer[index]) {
+        case (?value) { result.add(value); };
+        case null {};
+      };
+      i += 1;
+    };
+    Buffer.toArray(result)
+  };
+
+  private func getLastNMessagesFromBuffer(mb: MessageBuffer, n: Nat) : [LogMessage] {
+    let count = if (mb.size < n) { mb.size } else { n };
+    let startIndex = mb.size - count;
+    getMessagesFromBuffer(mb, startIndex, count)
+  };
+
+  // Message log functions
+  private func ensureMessageLog(p: Principal) {
+    switch (messageLogs.get(p)) {
+      case null {
+        messageLogs.put(p, createMessageBuffer());
+      };
+      case (?_) {};
+    };
+  };
+
+  private func addMessageToLog(p: Principal, content: Text) {
+    Debug.print("Adding message for principal: " # Principal.toText(p));
+    Debug.print("Message content: " # content);
+    ensureMessageLog(p);
+    switch (messageLogs.get(p)) {
+      case null { /* impossible due to ensureMessageLog */ };
+      case (?cb) {
+        let msg : LogMessage = {
+          id = nextMessageId;
+          timestamp = Time.now();
+          content = content;
+        };
+        nextMessageId += 1;
+        addMessageToBuffer(cb, msg);
+        Debug.print("Message added with ID: " # Nat.toText(msg.id));
+      };
+    };
+  };
+
+  private func broadcastToRoom(roomId: RoomId, content: Text) {
+    for ((principal, location) in playerLocations.entries()) {
+      if (location == roomId) {
+        addMessageToLog(principal, content);
+      };
+    };
+  };
+
+  private func getMessagesInternal(caller: Principal, afterId: ?MessageId) : [LogMessage] {
+    Debug.print("Getting messages for principal: " # Principal.toText(caller));
+    
+    switch (messageLogs.get(caller)) {
+      case null { 
+        Debug.print("No message log found for principal");
+        [] 
+      };
+      case (?cb) {
+        Debug.print("Found message log with size: " # Nat.toText(cb.size));
+        
+        // Short circuit if we know there are no newer messages
+        switch (afterId, cb.highestId) {
+          case (?requestedId, ?maxId) {
+            if (requestedId >= maxId) {
+              Debug.print("No new messages after ID: " # Nat.toText(requestedId));
+              return [];
+            };
+          };
+          case (_, _) {};
+        };
+
+        switch (afterId) {
+          case null {
+            // Return last 100 messages
+            let messages = getLastNMessagesFromBuffer(cb, 100);
+            Debug.print("Returning messages count: " # Nat.toText(messages.size()));
+            messages
+          };
+          case (?id) {
+            // Return messages strictly after the given id
+            let messages = getMessagesFromBuffer(cb, 0, cb.size);
+            let result = Buffer.Buffer<LogMessage>(0);
+            for (msg in messages.vals()) {
+              if (msg.id > id) {
+                result.add(msg);
+              };
+            };
+            Debug.print("Returning messages after ID: " # Nat.toText(id));
+            Buffer.toArray(result)
+          };
+        }
+      };
+    }
+  };
+
+  public query(msg) func getMessages(afterId: ?MessageId) : async [LogMessage] {
+    getMessagesInternal(msg.caller, afterId)
+  };
+
+  public query func test_getMessages(principal : Principal, afterId: ?MessageId) : async [LogMessage] {
+    getMessagesInternal(principal, afterId);
   };
 
   // Room management functions
@@ -143,10 +347,14 @@ actor {
             players.put(caller, name);
             usedNames.put(name, caller);
             
+            // Add welcome message to player's log
+            addMessageToLog(caller, "Welcome to the game, " # name # "!");
+            
             // Place player in starting room (room 0) if it exists
             switch (rooms.get(starting_room)) {
-              case (?_) {
+              case (?room) {
                 playerLocations.put(caller, starting_room);
+                broadcastToRoom(starting_room, name # " has entered the game");
                 return #ok("Successfully registered as " # name # " and entered the starting room");
               };
               case null {
@@ -218,27 +426,35 @@ actor {
     // Check if player is registered
     switch (players.get(caller)) {
       case null { return #err("You need to register a name first") };
-      case (?_) {};
-    };
-    
-    // Get player's current room
-    switch (getCurrentRoomInternal(caller)) {
-      case (#err(e)) { return #err(e) };
-      case (#ok(currentRoom)) {
-        // Find the exit
-        for ((id, exit) in currentRoom.exits.vals()) {
-          if (id == exitId) {
-            // Found the exit, try to move to target room
-            switch (rooms.get(exit.targetRoomId)) {
-              case null { return #err("Target room not found") };
-              case (?targetRoom) {
-                playerLocations.put(caller, exit.targetRoomId);
-                return #ok(targetRoom);
+      case (?playerName) {
+        // Get player's current room
+        switch (getCurrentRoomInternal(caller)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(currentRoom)) {
+            // Find the exit
+            for ((id, exit) in currentRoom.exits.vals()) {
+              if (id == exitId) {
+                // Found the exit, try to move to target room
+                switch (rooms.get(exit.targetRoomId)) {
+                  case null { return #err("Target room not found") };
+                  case (?targetRoom) {
+                    // Broadcast departure to current room
+                    broadcastToRoom(currentRoom.id, playerName # " leaves through " # exit.name);
+                    
+                    // Move player
+                    playerLocations.put(caller, exit.targetRoomId);
+                    
+                    // Broadcast arrival to new room
+                    broadcastToRoom(targetRoom.id, playerName # " arrives from " # currentRoom.name);
+                    
+                    return #ok(targetRoom);
+                  };
+                };
               };
             };
+            return #err("Exit not found");
           };
         };
-        return #err("Exit not found");
       };
     };
   };
@@ -267,5 +483,22 @@ actor {
         #ok(Buffer.toArray(playersHere))
       };
     };
+  };
+
+  public shared(msg) func clearPlayer(principal: Principal) : async () {
+    // Remove from players HashMap and usedNames
+    switch (players.get(principal)) {
+      case (?name) {
+        players.delete(principal);
+        usedNames.delete(name);
+      };
+      case null {};
+    };
+
+    // Remove from playerLocations
+    playerLocations.delete(principal);
+
+    // Remove from messageLogs
+    messageLogs.delete(principal);
   };
 };

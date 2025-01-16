@@ -4,6 +4,8 @@ import { AuthClient } from "@dfinity/auth-client";
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from "@dfinity/agent";
 import { idlFactory } from "declarations/sneed_mud_backend/sneed_mud_backend.did.js";
+import TextLog from './components/TextLog';
+import RoomInterface from './components/RoomInterface';
 
 function App() {
   const [greeting, setGreeting] = useState('');
@@ -14,10 +16,104 @@ function App() {
   const [registrationError, setRegistrationError] = useState(null);
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
   const [authenticatedActor, setAuthenticatedActor] = useState(null);
+  const [currentRoom, setCurrentRoom] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [playersInRoom, setPlayersInRoom] = useState([]);
+  const [lastMessageId, setLastMessageId] = useState(null);
 
   useEffect(() => {
     initAuth();
   }, []);
+
+  useEffect(() => {
+    if (authenticatedActor && playerName) {
+      // Initial room and message fetch
+      updateCurrentRoom();
+      fetchMessages();
+      
+      // Set up polling intervals
+      const roomInterval = setInterval(updateCurrentRoom, 5000);
+      
+      return () => {
+        clearInterval(roomInterval);
+      };
+    }
+  }, [authenticatedActor, playerName]);
+
+  // Separate effect for message polling
+  useEffect(() => {
+    if (authenticatedActor && playerName) {
+      const messageInterval = setInterval(fetchMessages, 1000);
+      return () => clearInterval(messageInterval);
+    }
+  }, [authenticatedActor, playerName, lastMessageId]);
+
+  async function fetchMessages() {
+    try {
+      // Convert lastMessageId to array format for Motoko
+      const lastIdParam = lastMessageId === null ? [] : [lastMessageId];
+      console.log("Fetching messages after:", lastIdParam, "lastMessageId:", lastMessageId?.toString());
+      
+      const newMessages = await authenticatedActor.getMessages(lastIdParam);
+      if (newMessages.length > 0) {
+        // Sort messages by ID to ensure order
+        newMessages.sort((a, b) => Number(BigInt(a.id) - BigInt(b.id)));
+        
+        // Only add messages we haven't seen yet
+        const currentLastId = lastMessageId === null ? -1n : lastMessageId;
+        const uniqueNewMessages = newMessages.filter(msg => BigInt(msg.id) > currentLastId);
+        
+        if (uniqueNewMessages.length > 0) {
+          setMessages(prev => [...prev, ...uniqueNewMessages.map(msg => msg.content)]);
+          // Store the new ID directly as a BigInt
+          const newLastId = BigInt(uniqueNewMessages[uniqueNewMessages.length - 1].id);
+          if (newLastId > currentLastId) {  // Only update if we actually have a newer message
+            console.log("Updating lastMessageId from", currentLastId.toString(), "to", newLastId.toString());
+            setLastMessageId(newLastId);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    }
+  }
+
+  async function updateCurrentRoom() {
+    try {
+      const result = await authenticatedActor.getCurrentRoom();
+      if ('ok' in result) {
+        const room = result.ok;
+        
+        // Get players in room
+        const playersResult = await authenticatedActor.getPlayersInRoom(room.id);
+        if ('ok' in playersResult) {
+          setPlayersInRoom(playersResult.ok);
+        }
+        // Only update the current room after we've handled the messaging logic
+        setCurrentRoom(room);
+      }
+    } catch (error) {
+      console.error("Error updating room:", error);
+    }
+  }
+
+  async function handleCommand(command) {
+    const lowerCommand = command.toLowerCase();
+    if (lowerCommand.startsWith('go ')) {
+      const exitId = lowerCommand.substring(3).trim();
+      try {
+        const result = await authenticatedActor.useExit(exitId);
+        if ('ok' in result) {
+          // First update messages to get the exit messages
+          await fetchMessages();
+          // Then update room state
+          await updateCurrentRoom();
+        }
+      } catch (error) {
+        console.error("Error executing command:", error);
+      }
+    }
+  }
 
   async function createAuthenticatedActor(identity) {
     const agent = new HttpAgent({ identity });
@@ -149,17 +245,16 @@ function App() {
   }
 
   return (
-    <main>
-      <img src="/logo2.svg" alt="DFINITY logo" />
-      <br />
-      <br />
-      {principal ? (
-        <button onClick={logout}>Logout</button>
-      ) : (
-        <button onClick={loginII}>Login</button>
-      )}
-      <div>
-        {principal ? `Logged in as: ${principal}` : "Not logged in"}
+    <main className="game-container">
+      <div className="auth-section">
+        {principal ? (
+          <button onClick={logout}>Logout</button>
+        ) : (
+          <button onClick={loginII}>Login</button>
+        )}
+        <div>
+          {principal ? `Logged in as: ${principal}` : "Not logged in"}
+        </div>
       </div>
 
       {principal && !playerName && (
@@ -186,8 +281,26 @@ function App() {
       )}
 
       {principal && playerName && (
-        <div className="player-info">
-          <h2>Welcome, {playerName}!</h2>
+        <div className="game-interface">
+          <div className="player-info">
+            <h2>Welcome, {playerName}!</h2>
+            {currentRoom && (
+              <div className="current-room">
+                <h3>{currentRoom.name}</h3>
+                <p>{currentRoom.description}</p>
+              </div>
+            )}
+          </div>
+          <TextLog messages={messages} />
+          <RoomInterface 
+            onCommand={handleCommand}
+            currentRoom={currentRoom}
+          />
+          {/* Debug display */}
+          <div style={{display: 'none'}}>
+            <p>Message count: {messages.length}</p>
+            <p>Last message ID: {lastMessageId}</p>
+          </div>
         </div>
       )}
     </main>
