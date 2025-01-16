@@ -98,7 +98,45 @@ function App() {
   }
 
   async function handleCommand(command) {
-    // Extract exitId from either a raw exitId or a 'go' command
+    // Handle say commands (/say or /s)
+    if (command.toLowerCase().startsWith('/say ') || command.toLowerCase().startsWith('/s ')) {
+      const message = command.substring(command.indexOf(' ') + 1).trim();
+      if (message) {
+        try {
+          const result = await authenticatedActor.say(message);
+          if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error saying message:", error);
+          setMessages(prev => [...prev, `Error: Failed to say message - ${error.message || 'Unknown error'}`]);
+        }
+      }
+      return;
+    }
+
+    // Handle whisper commands (/whisper or /w)
+    if (command.toLowerCase().startsWith('/whisper ') || command.toLowerCase().startsWith('/w ')) {
+      const parts = command.substring(command.indexOf(' ') + 1).trim().split(' ');
+      if (parts.length >= 2) {
+        const targetName = parts[0];
+        const message = parts.slice(1).join(' ');
+        try {
+          const result = await authenticatedActor.whisper(targetName, message);
+          if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error whispering message:", error);
+          setMessages(prev => [...prev, `Error: Failed to whisper message - ${error.message || 'Unknown error'}`]);
+        }
+      } else {
+        setMessages(prev => [...prev, "Error: Whisper command format is '/w <player> <message>'"]);
+      }
+      return;
+    }
+
+    // Handle movement commands
     let exitId = command;
     if (command.toLowerCase().startsWith('go ')) {
       exitId = command.substring(3).trim();

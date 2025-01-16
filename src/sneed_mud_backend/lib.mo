@@ -318,4 +318,45 @@ module {
     // Remove from messageLogs
     state.messageLogs.delete(principal);
   };
+
+  public func say(state: MudState, caller: Principal, message: Text) : Result.Result<(), Text> {
+    switch (state.players.get(caller)) {
+      case null { #err("You need to register a name first") };
+      case (?playerName) {
+        switch (state.playerLocations.get(caller)) {
+          case null { #err("You're not in any room") };
+          case (?roomId) {
+            // Send personalized message to the speaker
+            addMessageToLog(state, caller, "You say: " # message);
+            
+            // Broadcast to others in the room
+            for ((principal, location) in state.playerLocations.entries()) {
+              if (location == roomId and principal != caller) {
+                addMessageToLog(state, principal, playerName # " says: " # message);
+              };
+            };
+            #ok(())
+          };
+        };
+      };
+    };
+  };
+
+  public func whisper(state: MudState, caller: Principal, targetName: Text, message: Text) : Result.Result<(), Text> {
+    switch (state.players.get(caller)) {
+      case null { #err("You need to register a name first") };
+      case (?playerName) {
+        // Find the target player's principal by their name
+        switch (state.usedNames.get(targetName)) {
+          case null { #err("Player '" # targetName # "' not found") };
+          case (?targetPrincipal) {
+            // Send personalized messages to both players
+            addMessageToLog(state, caller, "You whisper to " # targetName # ": " # message);
+            addMessageToLog(state, targetPrincipal, playerName # " whispers to you: " # message);
+            #ok(())
+          };
+        };
+      };
+    };
+  };
 } 

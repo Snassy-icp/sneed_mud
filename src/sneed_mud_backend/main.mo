@@ -88,4 +88,12 @@ actor {
   public shared(msg) func clearPlayer(principal: Principal) : async () {
     Lib.clearPlayer(state, principal)
   };
+
+  public shared(msg) func say(message: Text) : async Result.Result<(), Text> {
+    Lib.say(state, msg.caller, message)
+  };
+
+  public shared(msg) func whisper(targetName: Text, message: Text) : async Result.Result<(), Text> {
+    Lib.whisper(state, msg.caller, targetName, message)
+  };
 }
