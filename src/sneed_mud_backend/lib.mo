@@ -57,6 +57,14 @@ module {
     };
   };
 
+  private func broadcastToRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal, content: Text) {
+    for ((principal, location) in state.playerLocations.entries()) {
+      if (location == roomId and principal != excludePrincipal) {
+        addMessageToLog(state, principal, content);
+      };
+    };
+  };
+
   public func getMessages(state: MudState, caller: Principal, afterId: ?MessageId) : [LogMessage] {
     Debug.print("Getting messages for principal: " # Principal.toText(caller));
     
@@ -195,7 +203,7 @@ module {
             switch (state.rooms.get(starting_room)) {
               case (?room) {
                 state.playerLocations.put(caller, starting_room);
-                broadcastToRoom(state, starting_room, name # " has entered the game");
+                broadcastToRoomExcept(state, starting_room, caller, name # " has entered the game");
                 return #ok("Successfully registered as " # name # " and entered the starting room");
               };
               case null {
@@ -253,14 +261,16 @@ module {
                 switch (state.rooms.get(exit.targetRoomId)) {
                   case null { return #err("Target room not found") };
                   case (?targetRoom) {
-                    // Broadcast departure to current room
-                    broadcastToRoom(state, currentRoom.id, playerName # " leaves through " # exit.name);
+                    // Send departure messages
+                    broadcastToRoomExcept(state, currentRoom.id, caller, playerName # " leaves through " # exit.name);
+                    addMessageToLog(state, caller, "You leave through " # exit.name);
                     
                     // Move player
                     state.playerLocations.put(caller, exit.targetRoomId);
                     
-                    // Broadcast arrival to new room
-                    broadcastToRoom(state, targetRoom.id, playerName # " arrives from " # currentRoom.name);
+                    // Send arrival messages
+                    broadcastToRoomExcept(state, targetRoom.id, caller, playerName # " arrives from " # currentRoom.name);
+                    addMessageToLog(state, caller, "You arrive in " # targetRoom.name);
                     
                     return #ok(targetRoom);
                   };
