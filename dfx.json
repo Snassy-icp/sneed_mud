@@ -1,0 +1,37 @@
+{
+  "canisters": {
+    "internet_identity": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/internet-identity/releases/download/release-2024-02-14/internet_identity.did",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/download/release-2024-02-14/internet_identity_dev.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      },
+      "frontend": {}
+    },
+    "sneed_mud_backend": {
+      "main": "src/sneed_mud_backend/main.mo",
+      "type": "motoko"
+    },
+    "sneed_mud_frontend": {
+      "dependencies": [
+        "sneed_mud_backend"
+      ],
+      "source": [
+        "src/sneed_mud_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "sneed_mud_frontend"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
