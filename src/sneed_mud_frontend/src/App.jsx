@@ -21,6 +21,53 @@ function App() {
   const [playersInRoom, setPlayersInRoom] = useState([]);
   const [lastMessageId, setLastMessageId] = useState(null);
 
+  // Direction aliases mapping
+  const DIRECTION_ALIASES = {
+    'n': 'north',
+    's': 'south',
+    'e': 'east',
+    'w': 'west',
+    'ne': 'northeast',
+    'nw': 'northwest',
+    'se': 'southeast',
+    'sw': 'southwest',
+  };
+
+  // Helper function to find matching exit
+  function findMatchingExit(command, exits) {
+    if (!exits || exits.length === 0) return null;
+    
+    const normalizedCommand = command.toLowerCase().trim();
+    
+    // Try to match against exitId, name, or direction
+    const possibleMatches = exits.filter(([exitId, exit]) => {
+      // Convert direction alias if it exists
+      const directionAlias = DIRECTION_ALIASES[normalizedCommand];
+      const normalizedDirection = exit.direction && exit.direction.length > 0 ? exit.direction[0].toLowerCase() : null;
+      
+      return (
+        // Match by exitId (partial match allowed)
+        exitId.toLowerCase().startsWith(normalizedCommand) ||
+        // Match by name (partial match allowed)
+        exit.name.toLowerCase().startsWith(normalizedCommand) ||
+        // Match by full name (partial words allowed)
+        exit.name.toLowerCase().split(' ').join(' ').startsWith(normalizedCommand) ||
+        // Match by direction
+        (normalizedDirection && (
+          normalizedDirection === normalizedCommand ||
+          (directionAlias && normalizedDirection === directionAlias)
+        ))
+      );
+    });
+
+    // If exactly one match is found, return it
+    if (possibleMatches.length === 1) {
+      return possibleMatches[0][0]; // Return the exitId
+    }
+    
+    return null;
+  }
+
   useEffect(() => {
     initAuth();
   }, []);
@@ -138,10 +185,19 @@ function App() {
 
     // Handle movement commands (/go or /g)
     if (command.toLowerCase().startsWith('/go ') || command.toLowerCase().startsWith('/g ')) {
-      const exitId = command.substring(command.indexOf(' ') + 1).trim();
+      const exitCommand = command.substring(command.indexOf(' ') + 1).trim();
+      
+      // Find matching exit
+      const matchingExitId = findMatchingExit(exitCommand, currentRoom?.exits);
+      
+      if (!matchingExitId) {
+        setMessages(prev => [...prev, `No matching exit found for '${exitCommand}'`]);
+        return;
+      }
+
       try {
-        console.log("Attempting to use exit:", exitId);
-        const result = await authenticatedActor.useExit(exitId);
+        console.log("Attempting to use exit:", matchingExitId);
+        const result = await authenticatedActor.useExit(matchingExitId);
         if ('ok' in result) {
           console.log("Successfully used exit");
           // First update messages to get the exit messages
