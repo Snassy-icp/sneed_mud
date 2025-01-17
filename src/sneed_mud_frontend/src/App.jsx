@@ -68,6 +68,52 @@ function App() {
     return null;
   }
 
+  // Helper function to get item type name
+  async function getItemTypeName(typeId) {
+    try {
+      const result = await authenticatedActor.getItemType(typeId);
+      if ('ok' in result) {
+        return result.ok.name;
+      }
+      return `Unknown Type ${typeId}`;
+    } catch (error) {
+      console.error("Error getting item type name:", error);
+      return `Unknown Type ${typeId}`;
+    }
+  }
+
+  // Helper function to find matching item by partial name
+  async function findMatchingItem(partialName) {
+    try {
+      const result = await authenticatedActor.getItems();
+      if ('ok' in result) {
+        const items = result.ok;
+        const normalizedSearch = partialName.toLowerCase().trim();
+        
+        // Filter items whose names start with the partial name
+        const matches = items.filter(item => {
+          const itemTypeName = item.type.name.toLowerCase();
+          return itemTypeName.startsWith(normalizedSearch);
+        });
+
+        // Return the ID if exactly one match is found
+        if (matches.length === 1) {
+          return { id: matches[0].id, name: matches[0].type.name };
+        } else if (matches.length > 1) {
+          throw new Error(`Multiple matches found: ${matches.map(m => m.type.name).join(', ')}`);
+        }
+      }
+      // Try parsing as ID if no name matches
+      const id = parseInt(partialName);
+      if (!isNaN(id)) {
+        return { id, name: await getItemTypeName(id) };
+      }
+      throw new Error(`No item found matching '${partialName}'`);
+    } catch (error) {
+      throw error;
+    }
+  }
+
   useEffect(() => {
     initAuth();
   }, []);
@@ -222,6 +268,179 @@ function App() {
       return;
     }
 
+    // Handle create item type command (/create_item_type)
+    if (command.toLowerCase().startsWith('/create_item_type ')) {
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      // Try to parse the quoted arguments
+      try {
+        // Match format: "name", "description", is_container, container_capacity, "icon_url", stack_max
+        const matches = argsString.match(/"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*(true|false)\s*,\s*(\d+|null)\s*,\s*"([^"]*)"\s*,\s*(\d+)/);
+        if (!matches || matches.length < 7) {
+          setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'"]);
+          return;
+        }
+        
+        const [_, name, description, isContainer, containerCapacity, iconUrl, stackMax] = matches;
+        try {
+          const result = await authenticatedActor.createItemType(
+            name,
+            description,
+            isContainer === 'true',
+            containerCapacity === 'null' ? [] : [parseInt(containerCapacity)], // Convert to optional array for Motoko
+            iconUrl,
+            parseInt(stackMax)
+          );
+          if ('ok' in result) {
+            setMessages(prev => [...prev, `Successfully created item type ${name} with ID ${result.ok}`]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error creating item type:", error);
+          setMessages(prev => [...prev, `Error: Failed to create item type - ${error.message || 'Unknown error'}`]);
+        }
+      } catch (error) {
+        setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'"]);
+      }
+      return;
+    }
+
+    // Handle create item command (/create_item)
+    if (command.toLowerCase().startsWith('/create_item ')) {
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      try {
+        const matches = argsString.match(/(\d+)(?:\s*,\s*(\d+))?/);
+        if (!matches) {
+          setMessages(prev => [...prev, "Error: Create item command format is '/create_item type_id[, count]'"]);
+          return;
+        }
+        
+        const [_, typeId, count] = matches;
+        try {
+          const result = await authenticatedActor.createItem(
+            parseInt(typeId),
+            count ? [parseInt(count)] : []
+          );
+          if ('ok' in result) {
+            const typeName = await getItemTypeName(parseInt(typeId));
+            const countStr = count ? ` (x${count})` : '';
+            setMessages(prev => [...prev, `Successfully created ${typeName}${countStr} with ID ${result.ok}`]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error creating item:", error);
+          setMessages(prev => [...prev, `Error: Failed to create item - ${error.message || 'Unknown error'}`]);
+        }
+      } catch (error) {
+        setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_item type_id[, count]'"]);
+      }
+      return;
+    }
+
+    // Handle move item command (/move_item)
+    if (command.toLowerCase().startsWith('/move_item ')) {
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      try {
+        const matches = argsString.match(/(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?/);
+        if (!matches) {
+          setMessages(prev => [...prev, "Error: Move item command format is '/move_item item_id, target_container_id[, count]'"]);
+          return;
+        }
+        
+        const [_, itemId, targetContainerId, count] = matches;
+        try {
+          const targetAccount = {
+            owner: await authenticatedActor.getCanisterPrincipal(),
+            subaccount: [ItemUtils.createItemSubaccount(parseInt(targetContainerId))]
+          };
+
+          const result = await authenticatedActor.transferItem(
+            parseInt(itemId),
+            targetAccount,
+            count ? [parseInt(count)] : []
+          );
+          if ('ok' in result) {
+            const [itemName, containerName] = await Promise.all([
+              getItemTypeName(parseInt(itemId)),
+              getItemTypeName(parseInt(targetContainerId))
+            ]);
+            const countStr = count ? ` (x${count})` : '';
+            setMessages(prev => [...prev, `Successfully moved ${itemName}${countStr} into ${containerName}`]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error moving item:", error);
+          setMessages(prev => [...prev, `Error: Failed to move item - ${error.message || 'Unknown error'}`]);
+        }
+      } catch (error) {
+        setMessages(prev => [...prev, "Error: Invalid command format. Use '/move_item item_id, target_container_id[, count]'"]);
+      }
+      return;
+    }
+
+    // Handle open container command (/open)
+    if (command.toLowerCase().startsWith('/open ')) {
+      const partialName = command.substring(command.indexOf(' ') + 1).trim();
+      
+      try {
+        const item = await findMatchingItem(partialName);
+        // First check if container is already open
+        const result = await authenticatedActor.toggleContainer(item.id);
+        if ('ok' in result) {
+          const isOpen = result.ok;
+          if (isOpen) {
+            setMessages(prev => [...prev, `${item.name} is now open`]);
+          } else {
+            // If it returned false, it was already open, so toggle it back
+            const secondResult = await authenticatedActor.toggleContainer(item.id);
+            if ('ok' in secondResult) {
+              setMessages(prev => [...prev, `${item.name} is already open`]);
+            }
+          }
+        } else if ('err' in result) {
+          setMessages(prev => [...prev, `Error: ${result.err}`]);
+        }
+      } catch (error) {
+        console.error("Error opening container:", error);
+        setMessages(prev => [...prev, `Error: ${error.message}`]);
+      }
+      return;
+    }
+
+    // Handle close container command (/close)
+    if (command.toLowerCase().startsWith('/close ')) {
+      const partialName = command.substring(command.indexOf(' ') + 1).trim();
+      
+      try {
+        const item = await findMatchingItem(partialName);
+        // First check if container is already closed
+        const result = await authenticatedActor.toggleContainer(item.id);
+        if ('ok' in result) {
+          const isOpen = result.ok;
+          if (!isOpen) {
+            setMessages(prev => [...prev, `${item.name} is now closed`]);
+          } else {
+            // If it returned true, it was closed, so toggle it back
+            const secondResult = await authenticatedActor.toggleContainer(item.id);
+            if ('ok' in secondResult) {
+              setMessages(prev => [...prev, `${item.name} is already closed`]);
+            }
+          }
+        } else if ('err' in result) {
+          setMessages(prev => [...prev, `Error: ${result.err}`]);
+        }
+      } catch (error) {
+        console.error("Error closing container:", error);
+        setMessages(prev => [...prev, `Error: ${error.message}`]);
+      }
+      return;
+    }
+
     // Handle say commands (/say or /s)
     if (command.toLowerCase().startsWith('/say ') || command.toLowerCase().startsWith('/s ')) {
       const message = command.substring(command.indexOf(' ') + 1).trim();
@@ -293,7 +512,7 @@ function App() {
     }
 
     // If no command matched, show error
-    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room "name", "desc", /create_exit "id", "name", "desc", target_id[, "dir"]`]);
+    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room, /create_exit, /create_item_type, /create_item, /move_item, /open, /close`]);
   }
 
   async function createAuthenticatedActor(identity) {
