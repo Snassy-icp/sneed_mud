@@ -125,7 +125,7 @@ function App() {
   }
 
   // Helper function to find matching item by partial name
-  async function findMatchingItem(partialName) {
+  async function findMatchingItem(partialName, inventoryOnly = false) {
     try {
       // First check inventory
       const inventoryResult = await authenticatedActor.getItems();
@@ -133,22 +133,47 @@ function App() {
         const items = inventoryResult.ok;
         const normalizedSearch = partialName.toLowerCase().trim();
         
-        // Filter items whose names start with the partial name
-        const matches = items.filter(item => {
-          const itemTypeName = item.item_type.name.toLowerCase();
-          return itemTypeName.startsWith(normalizedSearch);
-        });
+        // Helper function to recursively search containers
+        async function searchContainer(containerItems) {
+          let matches = [];
+          
+          // Check each item in this container
+          for (const item of containerItems) {
+            const itemTypeName = item.item_type.name.toLowerCase();
+            if (itemTypeName.startsWith(normalizedSearch)) {
+              matches.push({ id: BigInt(item.id), name: item.item_type.name });
+            }
+            
+            // If this is an open container, search its contents
+            if (item.item_type.is_container && item.is_open) {
+              const contentsResult = await authenticatedActor.getContainerContents(BigInt(item.id));
+              if ('ok' in contentsResult) {
+                const contents = contentsResult.ok;
+                // Get details for each item in the container
+                for (const itemId of contents) {
+                  const itemResult = await authenticatedActor.getItem(BigInt(itemId));
+                  if ('ok' in itemResult) {
+                    const nestedMatches = await searchContainer([itemResult.ok]);
+                    matches = matches.concat(nestedMatches);
+                  }
+                }
+              }
+            }
+          }
+          return matches;
+        }
 
-        // Return the ID if exactly one match is found
-        if (matches.length === 1) {
-          return { id: BigInt(matches[0].id), name: matches[0].item_type.name };
-        } else if (matches.length > 1) {
-          throw new Error(`Multiple matches found in inventory: ${matches.map(m => m.item_type.name).join(', ')}`);
+        // Start the recursive search from inventory items
+        const matches = await searchContainer(items);
+
+        // If we have any matches, return the first one
+        if (matches.length > 0) {
+          return matches[0];
         }
       }
 
-      // If not found in inventory, check room
-      if (currentRoom) {
+      // If not found in inventory and we're not restricted to inventory, check room
+      if (!inventoryOnly && currentRoom) {
         const roomItemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
         if ('ok' in roomItemsResult) {
           const items = roomItemsResult.ok;
@@ -160,11 +185,9 @@ function App() {
             return itemTypeName.startsWith(normalizedSearch);
           });
 
-          // Return the ID if exactly one match is found
-          if (matches.length === 1) {
+          // Return the first match if any are found
+          if (matches.length > 0) {
             return { id: BigInt(matches[0].id), name: matches[0].item_type.name };
-          } else if (matches.length > 1) {
-            throw new Error(`Multiple matches found in room: ${matches.map(m => m.item_type.name).join(', ')}`);
           }
         }
       }
@@ -951,8 +974,8 @@ function App() {
         const count = countStr ? parseInt(countStr) : 1;
         
         try {
-          // Find matching item
-          const item = await findMatchingItem(itemStr);
+          // Find matching item (inventory only)
+          const item = await findMatchingItem(itemStr, true);
           
           // Create room account
           const targetAccount = {
