@@ -4,6 +4,9 @@ import Types "./Types";
 import State "./State";
 import Lib "./lib";
 import ItemManager "./ItemManager";
+import Debug "mo:base/Debug";
+import Buffer "mo:base/Buffer";
+import Option "mo:base/Option";
 
 actor class MudBackend() = this {
   type Room = Types.Room;
@@ -12,7 +15,16 @@ actor class MudBackend() = this {
   type MessageId = Types.MessageId;
   type ItemId = Types.ItemId;
   type ItemTypeId = Types.ItemTypeId;
+  type ItemType = Types.ItemType;
   type Account = Types.Account;
+
+  // Item query types
+  type ItemInfo = {
+    id: ItemId;
+    item_type: ItemType;
+    count: Nat;
+    is_open: Bool;
+  };
 
   private stable var stable_state : State.StableState = State.initStable();
   private var state : State.MudState = State.init(stable_state);
@@ -199,5 +211,29 @@ actor class MudBackend() = this {
   // Get the principal of this canister
   public func getCanisterPrincipal() : async Principal {
     Principal.fromActor(this)
+  };
+
+  // Get items in player's inventory
+  public shared(msg) func getItems() : async Result.Result<[ItemInfo], Text> {
+    let playerItems = Buffer.Buffer<ItemInfo>(0);
+    
+    for ((itemId, item) in state.items.entries()) {
+      // Check if item is owned by the player (no subaccount means player inventory)
+      if (Principal.equal(item.owner.owner, msg.caller) and item.owner.subaccount == null) {
+        switch (state.itemTypes.get(item.type_id)) {
+          case null { /* Skip items with invalid type */ };
+          case (?itemType) {
+            playerItems.add({
+              id = item.id;
+              item_type = itemType;
+              count = item.count;
+              is_open = item.is_open;
+            });
+          };
+        };
+      };
+    };
+    
+    #ok(Buffer.toArray(playerItems))
   };
 }

@@ -94,4 +94,11 @@ module {
     from: ?Account;  // None for Mint
     to: ?Account;    // None for Burn
   };
+
+  public type ItemInfo = {
+    id : ItemId;
+    item_type : ItemType; // NB: "type" is a reserved word and can not be used for the field name.
+    count : Nat;
+    is_open : Bool;
+  };
 } 

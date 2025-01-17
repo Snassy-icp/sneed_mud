@@ -277,17 +277,29 @@ function App() {
         // Match format: "name", "description", is_container, container_capacity, "icon_url", stack_max
         const matches = argsString.match(/"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*(true|false)\s*,\s*(\d+|null)\s*,\s*"([^"]*)"\s*,\s*(\d+)/);
         if (!matches || matches.length < 7) {
-          setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'"]);
+          setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number."]);
           return;
         }
         
         const [_, name, description, isContainer, containerCapacity, iconUrl, stackMax] = matches;
         try {
+          // First check if an item type with this name already exists
+          const itemTypesResult = await authenticatedActor.getItemTypes();
+          if ('ok' in itemTypesResult) {
+            const existingType = itemTypesResult.ok.find(type => 
+              type.name.toLowerCase() === name.toLowerCase()
+            );
+            if (existingType) {
+              setMessages(prev => [...prev, `Error: An item type with the name "${name}" already exists (ID: ${existingType.id})`]);
+              return;
+            }
+          }
+
           const result = await authenticatedActor.createItemType(
             name,
             description,
             isContainer === 'true',
-            containerCapacity === 'null' ? [] : [parseInt(containerCapacity)], // Convert to optional array for Motoko
+            containerCapacity === 'null' ? [] : [parseInt(containerCapacity)],
             iconUrl,
             parseInt(stackMax)
           );
@@ -301,7 +313,7 @@ function App() {
           setMessages(prev => [...prev, `Error: Failed to create item type - ${error.message || 'Unknown error'}`]);
         }
       } catch (error) {
-        setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'"]);
+        setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number."]);
       }
       return;
     }
@@ -319,12 +331,20 @@ function App() {
         
         const [_, typeId, count] = matches;
         try {
+          // First verify the item type exists and get its name
+          const typeResult = await authenticatedActor.getItemType(parseInt(typeId));
+          if ('err' in typeResult) {
+            setMessages(prev => [...prev, `Error: ${typeResult.err}`]);
+            return;
+          }
+          const typeName = typeResult.ok.name;
+
+          // Now create the item
           const result = await authenticatedActor.createItem(
             parseInt(typeId),
             count ? [parseInt(count)] : []
           );
           if ('ok' in result) {
-            const typeName = await getItemTypeName(parseInt(typeId));
             const countStr = count ? ` (x${count})` : '';
             setMessages(prev => [...prev, `Successfully created ${typeName}${countStr} with ID ${result.ok}`]);
           } else if ('err' in result) {
@@ -515,8 +535,56 @@ function App() {
       return;
     }
 
+    // Handle inventory command (/inventory)
+    if (command.toLowerCase() === '/inventory' || command.toLowerCase() === '/i') {
+      try {
+        const result = await authenticatedActor.getItems();
+        if ('ok' in result) {
+          const items = result.ok;
+          if (items.length === 0) {
+            setMessages(prev => [...prev, "Your inventory is empty."]);
+            return;
+          }
+
+          // Group items by type and count
+          const groupedItems = items.reduce((acc, item) => {
+            const key = `${item.item_type.id}-${item.item_type.name}`;
+            if (!acc[key]) {
+              acc[key] = {
+                type: item.item_type,
+                count: item.count,
+                isOpen: item.is_open
+              };
+            } else {
+              acc[key].count += item.count;
+            }
+            return acc;
+          }, {});
+
+          // Format the inventory message
+          setMessages(prev => [
+            ...prev,
+            "Your inventory contains:",
+            ...Object.values(groupedItems).map(group => {
+              const countStr = group.count > 1 ? ` (x${group.count})` : '';
+              const containerStatus = group.type.is_container ? 
+                ` [${group.isOpen ? 'open' : 'closed'}]` : 
+                '';
+              return `  ${group.type.name}${countStr}${containerStatus}`;
+            })
+          ]);
+        } else if ('err' in result) {
+          setMessages(prev => [...prev, `Error: ${result.err}`]);
+        }
+      } catch (error) {
+        console.error("Error getting inventory:", error);
+        setMessages(prev => [...prev, `Error: Failed to get inventory - ${error.message || 'Unknown error'}`]);
+      }
+      return;
+    }
+
     // If no command matched, show error
-    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room, /create_exit, /create_item_type, /create_item, /put, /open, /close`]);
+    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room, /create_exit, /create_item_type, /create_item, /put, /open, /close, /inventory (/i)`]);
   }
 
   async function createAuthenticatedActor(identity) {
