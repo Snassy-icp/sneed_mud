@@ -277,18 +277,16 @@ function App() {
         const result = await authenticatedActor.useExit(matchingExitId);
         if ('ok' in result) {
           console.log("Successfully used exit");
-          // First update messages to get the exit messages
-          await fetchMessages();
-          // Then update room state
+          // Remove the explicit fetchMessages call since the polling will handle it
+          // await fetchMessages();
+          // Just update the room state
           await updateCurrentRoom();
         } else if ('err' in result) {
           console.error("Error using exit:", result.err);
-          // Add error message to the game log
           setMessages(prev => [...prev, `Error: ${result.err}`]);
         }
       } catch (error) {
         console.error("Error executing command:", error);
-        // Add error message to the game log
         setMessages(prev => [...prev, `Error: Failed to use exit - ${error.message || 'Unknown error'}`]);
       }
       return;
