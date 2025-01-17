@@ -340,45 +340,49 @@ function App() {
       return;
     }
 
-    // Handle move item command (/move_item)
-    if (command.toLowerCase().startsWith('/move_item ')) {
+    // Handle move item command (/put)
+    if (command.toLowerCase().startsWith('/put ')) {
       const argsString = command.substring(command.indexOf(' ') + 1).trim();
       
       try {
-        const matches = argsString.match(/(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?/);
+        // Match format: item (in|into) container
+        const matches = argsString.match(/^(.+?)\s+(in|into)\s+(.+)$/i);
         if (!matches) {
-          setMessages(prev => [...prev, "Error: Move item command format is '/move_item item_id, target_container_id[, count]'"]);
+          setMessages(prev => [...prev, "Error: Put command format is '/put <item> in|into <container>'"]);
           return;
         }
         
-        const [_, itemId, targetContainerId, count] = matches;
+        const [_, itemStr, preposition, containerStr] = matches;
+        
         try {
+          // Find matching items
+          const [item, container] = await Promise.all([
+            findMatchingItem(itemStr),
+            findMatchingItem(containerStr)
+          ]);
+
           const targetAccount = {
             owner: await authenticatedActor.getCanisterPrincipal(),
-            subaccount: [ItemUtils.createItemSubaccount(parseInt(targetContainerId))]
+            subaccount: [ItemUtils.createItemSubaccount(container.id)]
           };
 
           const result = await authenticatedActor.transferItem(
-            parseInt(itemId),
+            item.id,
             targetAccount,
-            count ? [parseInt(count)] : []
+            [] // No count support in this syntax
           );
+          
           if ('ok' in result) {
-            const [itemName, containerName] = await Promise.all([
-              getItemTypeName(parseInt(itemId)),
-              getItemTypeName(parseInt(targetContainerId))
-            ]);
-            const countStr = count ? ` (x${count})` : '';
-            setMessages(prev => [...prev, `Successfully moved ${itemName}${countStr} into ${containerName}`]);
+            setMessages(prev => [...prev, `You put ${item.name} into ${container.name}`]);
           } else if ('err' in result) {
             setMessages(prev => [...prev, `Error: ${result.err}`]);
           }
         } catch (error) {
           console.error("Error moving item:", error);
-          setMessages(prev => [...prev, `Error: Failed to move item - ${error.message || 'Unknown error'}`]);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
         }
       } catch (error) {
-        setMessages(prev => [...prev, "Error: Invalid command format. Use '/move_item item_id, target_container_id[, count]'"]);
+        setMessages(prev => [...prev, "Error: Put command format is '/put <item> in|into <container>'"]);
       }
       return;
     }
@@ -512,7 +516,7 @@ function App() {
     }
 
     // If no command matched, show error
-    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room, /create_exit, /create_item_type, /create_item, /move_item, /open, /close`]);
+    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room, /create_exit, /create_item_type, /create_item, /put, /open, /close`]);
   }
 
   async function createAuthenticatedActor(identity) {
