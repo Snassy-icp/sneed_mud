@@ -37,7 +37,7 @@ const RoomInterface = ({ onCommand, currentRoom }) => {
           type="text"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
-          placeholder="Enter command... (/say, /whisper, /go, /create_room)"
+          placeholder='Enter command... (/say, /whisper, /go, /create_room "name", "desc", /create_exit "id", "name", "desc", target_id[, "dir"])'
           className="command-input"
         />
         <button type="submit" className="command-button">Send</button>

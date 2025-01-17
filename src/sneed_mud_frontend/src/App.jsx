@@ -145,6 +145,53 @@ function App() {
   }
 
   async function handleCommand(command) {
+    // Handle create exit command (/create_exit)
+    if (command.toLowerCase().startsWith('/create_exit ')) {
+      if (!currentRoom) {
+        setMessages(prev => [...prev, "Error: You must be in a room to create an exit"]);
+        return;
+      }
+
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      // Try to parse the quoted arguments and target room ID
+      try {
+        // Match three quoted strings followed by a number and optionally a quoted direction
+        const matches = argsString.match(/"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*(\d+)(?:\s*,\s*"([^"]*)"\s*)?/);
+        if (!matches) {
+          setMessages(prev => [...prev, "Error: Create exit command format is '/create_exit \"Exit ID\", \"Exit Name\", \"Exit Description\", target_room_id[, \"direction\"]'"]);
+          return;
+        }
+        
+        const [_, exitId, name, description, targetRoomId, direction] = matches;
+        
+        try {
+          const result = await authenticatedActor.addExit(
+            currentRoom.id,
+            exitId,
+            name,
+            description,
+            parseInt(targetRoomId),
+            direction ? [direction] : [] // Convert to optional array for Motoko
+          );
+          
+          if ('ok' in result) {
+            setMessages(prev => [...prev, `Successfully created exit '${name}' (ID: ${exitId}) to room ${targetRoomId}`]);
+            // Update the room to show the new exit
+            await updateCurrentRoom();
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error creating exit:", error);
+          setMessages(prev => [...prev, `Error: Failed to create exit - ${error.message || 'Unknown error'}`]);
+        }
+      } catch (error) {
+        setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_exit \"Exit ID\", \"Exit Name\", \"Exit Description\", target_room_id[, \"direction\"]'"]);
+      }
+      return;
+    }
+
     // Handle create room command (/create_room)
     if (command.toLowerCase().startsWith('/create_room ')) {
       const argsString = command.substring(command.indexOf(' ') + 1).trim();
@@ -248,7 +295,7 @@ function App() {
     }
 
     // If no command matched, show error
-    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room`]);
+    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room "name", "desc", /create_exit "id", "name", "desc", target_id[, "dir"]`]);
   }
 
   async function createAuthenticatedActor(identity) {
