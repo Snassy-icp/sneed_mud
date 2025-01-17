@@ -145,6 +145,36 @@ function App() {
   }
 
   async function handleCommand(command) {
+    // Handle create room command (/create_room)
+    if (command.toLowerCase().startsWith('/create_room ')) {
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      // Try to parse the quoted arguments
+      try {
+        const matches = argsString.match(/"([^"]*)"\s*,\s*"([^"]*)"/);
+        if (!matches || matches.length < 3) {
+          setMessages(prev => [...prev, "Error: Create room command format is '/create_room \"Room Name\", \"Room Description\"'"]);
+          return;
+        }
+        
+        const [_, name, description] = matches;
+        try {
+          const result = await authenticatedActor.createRoom(name, description);
+          if ('ok' in result) {
+            setMessages(prev => [...prev, `Successfully created room ${name} with ID ${result.ok}`]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error creating room:", error);
+          setMessages(prev => [...prev, `Error: Failed to create room - ${error.message || 'Unknown error'}`]);
+        }
+      } catch (error) {
+        setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_room \"Room Name\", \"Room Description\"'"]);
+      }
+      return;
+    }
+
     // Handle say commands (/say or /s)
     if (command.toLowerCase().startsWith('/say ') || command.toLowerCase().startsWith('/s ')) {
       const message = command.substring(command.indexOf(' ') + 1).trim();
@@ -218,7 +248,7 @@ function App() {
     }
 
     // If no command matched, show error
-    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g)`]);
+    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room`]);
   }
 
   async function createAuthenticatedActor(identity) {
