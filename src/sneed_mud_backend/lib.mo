@@ -31,8 +31,8 @@ module {
   };
 
   private func addMessageToLog(state: MudState, p: Principal, content: Text) {
-    Debug.print("Adding message for principal: " # Principal.toText(p));
-    Debug.print("Message content: " # content);
+    //Debug.print("Adding message for principal: " # Principal.toText(p));
+    //Debug.print("Message content: " # content);
     ensureMessageLog(state, p);
     switch (state.messageLogs.get(p)) {
       case null { /* impossible due to ensureMessageLog */ };
@@ -44,7 +44,7 @@ module {
         };
         state.stable_state.nextMessageId += 1;
         BufferUtils.addToCircularBuffer(cb, msg);
-        Debug.print("Message added with ID: " # Nat.toText(msg.id));
+        //Debug.print("Message added with ID: " # Nat.toText(msg.id));
       };
     };
   };
@@ -70,17 +70,17 @@ module {
     
     switch (state.messageLogs.get(caller)) {
       case null { 
-        Debug.print("No message log found for principal");
+        //Debug.print("No message log found for principal");
         [] 
       };
       case (?cb) {
-        Debug.print("Found message log with size: " # Nat.toText(cb.size));
+        //Debug.print("Found message log with size: " # Nat.toText(cb.size));
         
         // Short circuit if we know there are no newer messages
         switch (afterId, cb.highestId) {
           case (?requestedId, ?maxId) {
             if (requestedId >= maxId) {
-              Debug.print("No new messages after ID: " # Nat.toText(requestedId));
+              //Debug.print("No new messages after ID: " # Nat.toText(requestedId));
               return [];
             };
           };
@@ -91,7 +91,7 @@ module {
           case null {
             // Return last 100 messages
             let messages = BufferUtils.getLastNFromCircularBuffer(cb, 100);
-            Debug.print("Returning messages count: " # Nat.toText(messages.size()));
+            //Debug.print("Returning messages count: " # Nat.toText(messages.size()));
             messages
           };
           case (?id) {
@@ -103,7 +103,7 @@ module {
                 result.add(msg);
               };
             };
-            Debug.print("Returning messages after ID: " # Nat.toText(id));
+            //Debug.print("Returning messages after ID: " # Nat.toText(id));
             Buffer.toArray(result)
           };
         }

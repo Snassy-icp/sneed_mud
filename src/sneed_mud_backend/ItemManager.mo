@@ -427,6 +427,8 @@ module {
     caller: Principal,
     containerId: ItemId
   ) : Result.Result<[ItemId], Text> {
+    Debug.print("Getting contents for container: " # debug_show(containerId));
+    
     switch (state.items.get(containerId)) {
       case null { #err("Container not found") };
       case (?container) {
@@ -449,13 +451,16 @@ module {
 
             // Find all items owned by this container
             let containerSubaccount = ItemUtils.createItemSubaccount(containerId);
+            Debug.print("Container subaccount: " # debug_show(Blob.toArray(containerSubaccount)));
             let contents = Buffer.Buffer<ItemId>(0);
             
             for ((id, item) in state.items.entries()) {
               switch (item.owner.subaccount) {
                 case null { /* Not container owned */ };
                 case (?subaccount) {
+                  Debug.print("Checking item " # debug_show(id) # " with subaccount: " # debug_show(Blob.toArray(subaccount)));
                   if (Blob.equal(subaccount, containerSubaccount)) {
+                    Debug.print("Found matching item: " # debug_show(id));
                     contents.add(id);
                   };
                 };

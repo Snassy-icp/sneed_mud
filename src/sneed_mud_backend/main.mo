@@ -265,4 +265,29 @@ actor class MudBackend() = this {
       case (?itemType) { #ok(itemType) };
     }
   };
+
+  // Get a specific item by ID
+  public shared(msg) func getItem(itemId: Types.ItemId) : async Result.Result<Types.ItemInfo, Text> {
+    switch (state.items.get(itemId)) {
+      case null { #err("Item not found") };
+      case (?item) {
+        // Check if caller can access the item
+        if (not ItemUtils.canAccessItem(state, itemId, msg.caller)) {
+          return #err("You don't have access to this item");
+        };
+
+        switch (state.itemTypes.get(item.type_id)) {
+          case null { #err("Item type not found") };
+          case (?itemType) {
+            #ok({
+              id = item.id;
+              item_type = itemType;
+              count = item.count;
+              is_open = item.is_open;
+            })
+          };
+        }
+      };
+    }
+  };
 }

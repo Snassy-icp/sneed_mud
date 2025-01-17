@@ -23,25 +23,22 @@ function App() {
 
   // Helper function to create item subaccount
   function createItemSubaccount(itemId) {
-    // Convert itemId to bytes
-    const bytes = [];
-    let n = BigInt(itemId);
-    // Add type byte (2 for item ownership)
-    bytes.push(0); // Version byte
-    bytes.push(2); // Type byte for item ownership
+    // Create the 32-byte array with proper format
+    const bytes = new Array(32).fill(0);
+    bytes[0] = 32; // Length byte
+    bytes[1] = 2;  // Type byte (2 for item ownership)
     
-    // Add item ID bytes (big-endian)
+    // Convert itemId to bytes (little-endian)
+    let n = BigInt(itemId);
+    let pos = 2; // Start at position 2 (after length and type bytes)
+    
+    // Write the ID bytes in little-endian order
     while (n > 0n) {
-      bytes.unshift(Number(n & 0xFFn));
+      bytes[pos++] = Number(n & 0xFFn);
       n = n >> 8n;
     }
     
-    // Pad to 32 bytes
-    while (bytes.length < 32) {
-      bytes.unshift(0);
-    }
-    
-    return Array.from(bytes); // Return as regular array of numbers
+    return bytes;
   }
 
   // Direction aliases mapping
@@ -108,9 +105,10 @@ function App() {
   // Helper function to find matching item by partial name
   async function findMatchingItem(partialName) {
     try {
-      const result = await authenticatedActor.getItems();
-      if ('ok' in result) {
-        const items = result.ok;
+      // First check inventory
+      const inventoryResult = await authenticatedActor.getItems();
+      if ('ok' in inventoryResult) {
+        const items = inventoryResult.ok;
         const normalizedSearch = partialName.toLowerCase().trim();
         
         // Filter items whose names start with the partial name
@@ -121,15 +119,38 @@ function App() {
 
         // Return the ID if exactly one match is found
         if (matches.length === 1) {
-          return { id: matches[0].id, name: matches[0].item_type.name };
+          return { id: BigInt(matches[0].id), name: matches[0].item_type.name };
         } else if (matches.length > 1) {
-          throw new Error(`Multiple matches found: ${matches.map(m => m.item_type.name).join(', ')}`);
+          throw new Error(`Multiple matches found in inventory: ${matches.map(m => m.item_type.name).join(', ')}`);
         }
       }
+
+      // If not found in inventory, check room
+      if (currentRoom) {
+        const roomItemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
+        if ('ok' in roomItemsResult) {
+          const items = roomItemsResult.ok;
+          const normalizedSearch = partialName.toLowerCase().trim();
+          
+          // Filter items whose names start with the partial name
+          const matches = items.filter(item => {
+            const itemTypeName = item.item_type.name.toLowerCase();
+            return itemTypeName.startsWith(normalizedSearch);
+          });
+
+          // Return the ID if exactly one match is found
+          if (matches.length === 1) {
+            return { id: BigInt(matches[0].id), name: matches[0].item_type.name };
+          } else if (matches.length > 1) {
+            throw new Error(`Multiple matches found in room: ${matches.map(m => m.item_type.name).join(', ')}`);
+          }
+        }
+      }
+
       // Try parsing as ID if no name matches
       const id = parseInt(partialName);
       if (!isNaN(id)) {
-        return { id, name: await getItemTypeName(id) };
+        return { id: BigInt(id), name: await getItemTypeName(id) };
       }
       throw new Error(`No item found matching '${partialName}'`);
     } catch (error) {
@@ -141,36 +162,44 @@ function App() {
   async function getContainerContentsRecursive(containerId, depth = 0) {
     if (depth > 5) return []; // Prevent infinite recursion, limit depth to 5 levels
     
-    const contentsResult = await authenticatedActor.getContainerContents(containerId);
-    if (!('ok' in contentsResult)) return [];
+    console.log("Getting contents for container:", containerId);
+    const contentsResult = await authenticatedActor.getContainerContents(BigInt(containerId));
+    console.log("Raw contents result:", contentsResult);
+    
+    if (!('ok' in contentsResult)) {
+      console.log("Error getting container contents:", contentsResult);
+      return [];
+    }
     
     const contents = contentsResult.ok;
+    console.log("Raw contents array:", contents);
     const messages = [];
     
     if (contents.length > 0) {
       // Group contents by type
       const groupedContents = new Map();
       for (const itemId of contents) {
-        const itemResult = await authenticatedActor.getItems();
+        console.log("Getting item details for:", itemId);
+        const itemResult = await authenticatedActor.getItem(BigInt(itemId));
+        console.log("Item result:", itemResult);
         if ('ok' in itemResult) {
-          const containerItem = itemResult.ok.find(i => i.id === itemId);
-          if (containerItem) {
-            const key = containerItem.item_type.name;
-            const count = groupedContents.get(key)?.count || 0;
-            groupedContents.set(key, {
-              id: containerItem.id,
-              count: count + containerItem.count,
-              isContainer: containerItem.item_type.is_container,
-              isOpen: containerItem.is_open,
-              type: containerItem.item_type
-            });
-          }
+          const containerItem = itemResult.ok;
+          console.log("Container item:", containerItem);
+          const key = containerItem.item_type.name;
+          const count = groupedContents.get(key)?.count || 0n;  // Initialize as BigInt
+          groupedContents.set(key, {
+            id: containerItem.id,
+            count: count + BigInt(containerItem.count),  // Convert and add as BigInt
+            isContainer: containerItem.item_type.is_container,
+            isOpen: containerItem.is_open,
+            type: containerItem.item_type
+          });
         }
       }
       
       // Display grouped contents
       for (const [name, info] of groupedContents) {
-        const countStr = info.count > 1 ? ` (x${info.count})` : '';
+        const countStr = info.count > 1n ? ` (x${info.count})` : '';  // Compare with BigInt
         const containerStatus = info.isContainer ? 
           ` [${info.isOpen ? 'open' : 'closed'}]` : 
           '';
@@ -483,15 +512,19 @@ function App() {
             findMatchingItem(containerStr)
           ]);
 
+          console.log("Found item:", item);
+          console.log("Found container:", container);
+          console.log("Container ID:", Number(container.id));
+
           const targetAccount = {
             owner: await authenticatedActor.getCanisterPrincipal(),
-            subaccount: [createItemSubaccount(container.id)]
+            subaccount: [createItemSubaccount(Number(container.id))]
           };
 
           const result = await authenticatedActor.transferItem(
-            item.id,
+            Number(item.id),
             targetAccount,
-            [] // No count support in this syntax
+            [] // Empty array represents null/None in Motoko
           );
           
           if ('ok' in result) {
@@ -769,7 +802,10 @@ function App() {
         // First check inventory
         const inventoryResult = await authenticatedActor.getItems();
         if ('ok' in inventoryResult) {
-          const items = inventoryResult.ok;
+          const items = inventoryResult.ok.map(item => ({
+            ...item,
+            id: BigInt(item.id)  // Convert ID to BigInt immediately
+          }));
           const normalizedSearch = itemName.toLowerCase().trim();
           
           // Find matching items in inventory
@@ -789,8 +825,13 @@ function App() {
               
               if (item.is_open) {
                 messages.push("It contains:");
-                const contents = await getContainerContentsRecursive(item.id);
-                messages.push(...contents);
+                try {
+                  const contents = await getContainerContentsRecursive(item.id);
+                  messages.push(...contents);
+                } catch (error) {
+                  console.error("Error getting container contents:", error);
+                  messages.push("  Error: Unable to view contents");
+                }
               }
             }
             
@@ -806,7 +847,10 @@ function App() {
         if (currentRoom) {
           const roomItemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
           if ('ok' in roomItemsResult) {
-            const items = roomItemsResult.ok;
+            const items = roomItemsResult.ok.map(item => ({
+              ...item,
+              id: BigInt(item.id)  // Convert ID to BigInt immediately
+            }));
             const normalizedSearch = itemName.toLowerCase().trim();
             
             // Find matching items in room
@@ -826,8 +870,13 @@ function App() {
                 
                 if (item.is_open) {
                   messages.push("It contains:");
-                  const contents = await getContainerContentsRecursive(item.id);
-                  messages.push(...contents);
+                  try {
+                    const contents = await getContainerContentsRecursive(item.id);
+                    messages.push(...contents);
+                  } catch (error) {
+                    console.error("Error getting container contents:", error);
+                    messages.push("  Error: Unable to view contents");
+                  }
                 }
               }
               

@@ -1,3 +1,17 @@
+// ItemUtils.mo - Utility functions for item management
+//
+// IMPORTANT: Byte Order Convention
+// ------------------------------
+// All byte-level operations in this codebase use little-endian order.
+// This means:
+// - When converting numbers to bytes: least significant byte is written first
+// - When reading bytes as numbers: first byte is least significant
+// - This applies to all ID encodings in subaccounts (room IDs, item IDs)
+//
+// Example:
+// - Number 258 (0x102) is stored as [0x02, 0x01, 0x00, ...]
+// - When reading [0x02, 0x01, 0x00, ...] we get 258 (2 + 1*256 + 0*65536)
+
 import Principal "mo:base/Principal";
 import Types "./Types";
 import State "./State";
@@ -22,35 +36,45 @@ module {
 
   // Create subaccount for room ownership
   public func createRoomSubaccount(roomId: Types.RoomId) : Blob {
-    let bytes = Buffer.Buffer<Nat8>(32);
-    bytes.add(32); // Length
-    bytes.add(1);  // Room type
+    let bytes = Array.init<Nat8>(32, 0);
+    bytes[0] := 32; // Length byte
+    bytes[1] := 1;  // Type byte (1 for room ownership)
     
-    // Add room ID bytes (padded to 30 bytes)
-    let idBytes = nat_to_bytes(roomId);
-    let padding = Array.tabulate<Nat8>(30 - idBytes.size(), func(_) = 0);
-    for (b in padding.vals()) { bytes.add(b) };
-    for (b in idBytes.vals()) { bytes.add(b) };
+    // Convert roomId to bytes (little-endian)
+    var n = roomId;
+    var pos = 2; // Start at position 2 (after length and type bytes)
     
-    Blob.fromArray(Buffer.toArray(bytes))
+    // Write the ID bytes in little-endian order
+    while (n > 0) {
+      bytes[pos] := Nat8.fromNat(n % 256);
+      n := n / 256;
+      pos += 1;
+    };
+    
+    Blob.fromArray(Array.freeze(bytes))
   };
 
   // Create subaccount for item ownership
-  public func createItemSubaccount(itemId: ItemId) : Blob {
-    let bytes = Buffer.Buffer<Nat8>(32);
-    bytes.add(32); // Length
-    bytes.add(2);  // Item type
+  public func createItemSubaccount(itemId: Nat) : Blob {
+    let bytes = Array.init<Nat8>(32, 0);
+    bytes[0] := 32; // Length byte
+    bytes[1] := 2;  // Type byte (2 for item ownership)
     
-    // Add item ID bytes (padded to 30 bytes)
-    let idBytes = nat_to_bytes(itemId);
-    let padding = Array.tabulate<Nat8>(30 - idBytes.size(), func(_) = 0);
-    for (b in padding.vals()) { bytes.add(b) };
-    for (b in idBytes.vals()) { bytes.add(b) };
+    // Convert itemId to bytes (little-endian)
+    var n = itemId;
+    var pos = 2; // Start at position 2 (after length and type bytes)
     
-    Blob.fromArray(Buffer.toArray(bytes))
+    // Write the ID bytes in little-endian order
+    while (n > 0) {
+      bytes[pos] := Nat8.fromNat(n % 256);
+      n := n / 256;
+      pos += 1;
+    };
+    
+    Blob.fromArray(Array.freeze(bytes))
   };
 
-  // Helper to convert Nat to bytes
+  // Helper to convert Nat to bytes (little-endian)
   private func nat_to_bytes(n: Nat) : [Nat8] {
     var remaining = n;
     let bytes = Buffer.Buffer<Nat8>(8); // Assuming max 8 bytes needed
