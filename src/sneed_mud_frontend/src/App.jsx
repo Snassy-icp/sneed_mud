@@ -269,6 +269,61 @@ function App() {
     return messages;
   }
 
+  // Helper function to find matching item in room or its containers
+  async function findMatchingRoomItem(partialName) {
+    if (!currentRoom) return null;
+    
+    try {
+      const roomItemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
+      if ('ok' in roomItemsResult) {
+        const items = roomItemsResult.ok;
+        const normalizedSearch = partialName.toLowerCase().trim();
+        
+        // Helper function to recursively search containers
+        async function searchContainer(containerItems) {
+          let matches = [];
+          
+          // Check each item in this container
+          for (const item of containerItems) {
+            const itemTypeName = item.item_type.name.toLowerCase();
+            if (itemTypeName.startsWith(normalizedSearch)) {
+              matches.push({ id: BigInt(item.id), name: item.item_type.name, count: item.count });
+            }
+            
+            // If this is an open container, search its contents
+            if (item.item_type.is_container && item.is_open) {
+              const contentsResult = await authenticatedActor.getContainerContents(BigInt(item.id));
+              if ('ok' in contentsResult) {
+                const contents = contentsResult.ok;
+                // Get details for each item in the container
+                for (const itemId of contents) {
+                  const itemResult = await authenticatedActor.getItem(BigInt(itemId));
+                  if ('ok' in itemResult) {
+                    const nestedMatches = await searchContainer([itemResult.ok]);
+                    matches = matches.concat(nestedMatches);
+                  }
+                }
+              }
+            }
+          }
+          return matches;
+        }
+
+        // Start the recursive search from room items
+        const matches = await searchContainer(items);
+
+        // Return the first match if any are found
+        if (matches.length > 0) {
+          return matches[0];
+        }
+      }
+      
+      throw new Error(`No item found matching '${partialName}'`);
+    } catch (error) {
+      throw error;
+    }
+  }
+
   useEffect(() => {
     initAuth();
   }, []);
@@ -953,6 +1008,7 @@ function App() {
       /whisper <player> <message>, /w <player> <message> - Send a private message to a player
       /open <container> - Open a container
       /put <item> in|into <container> - Put an item into a container
+      /pick <item> [count], /take <item> [count] - Pick up an item from the room
       /drop <item> [count] - Drop an item in the current room
       /inventory, /i - Show your inventory`]);
       return;
@@ -1001,6 +1057,53 @@ function App() {
         }
       } catch (error) {
         setMessages(prev => [...prev, "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'"]); 
+      }
+      return;
+    }
+
+    // Handle pick/take commands (/pick or /take)
+    if (command.toLowerCase().startsWith('/pick ') || command.toLowerCase().startsWith('/take ')) {
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      try {
+        // Match format: item [count]
+        const matches = argsString.match(/^(.+?)(?:\s+(\d+))?$/);
+        if (!matches) {
+          setMessages(prev => [...prev, "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'"]);
+          return;
+        }
+        
+        const [_, itemStr, countStr] = matches;
+        const count = countStr ? parseInt(countStr) : 1;
+        
+        try {
+          // Find matching item in room or its containers
+          const item = await findMatchingRoomItem(itemStr);
+          
+          // Create target account (player's inventory)
+          const targetAccount = {
+            owner: Principal.fromText(principal),
+            subaccount: []
+          };
+
+          // Transfer item to inventory
+          const result = await authenticatedActor.transferItem(
+            item.id,
+            targetAccount,
+            count === item.count ? [] : [count]
+          );
+          
+          if ('ok' in result) {
+            setMessages(prev => [...prev, `You pick up ${item.name}`]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error picking up item:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+      } catch (error) {
+        setMessages(prev => [...prev, "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'"]);
       }
       return;
     }
