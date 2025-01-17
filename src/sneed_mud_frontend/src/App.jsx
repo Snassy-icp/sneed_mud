@@ -1092,9 +1092,7 @@ function App() {
             count === item.count ? [] : [count]
           );
           
-          if ('ok' in result) {
-            setMessages(prev => [...prev, `You pick up ${item.name}`]);
-          } else if ('err' in result) {
+          if ('err' in result) {
             setMessages(prev => [...prev, `Error: ${result.err}`]);
           }
         } catch (error) {

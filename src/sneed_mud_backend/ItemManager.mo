@@ -32,14 +32,29 @@ module {
           case (?item) {
             switch (state.itemTypes.get(item.type_id)) {
               case (?itemType) {
+                // Check if source is a room
+                let isFromRoom = switch (event.from) {
+                  case (?fromAccount) {
+                    switch (fromAccount.subaccount) {
+                      case (?subaccount) {
+                        let ownerBytes = Blob.toArray(subaccount);
+                        ownerBytes.size() > 1 and ownerBytes[1] == 1; // Type 1 is room ownership
+                      };
+                      case null { false };
+                    };
+                  };
+                  case null { false };
+                };
+
                 // Get source player name (if from a player)
                 let sourcePlayerName = switch (event.from) {
                   case (?fromAccount) {
-                    // For transfers, use the caller's name if they can access the item
-                    switch (state.players.get(fromAccount.owner)) {
-                      case (?name) { ?name };
-                      case null { null };
-                    };
+                    if (not isFromRoom) {
+                      switch (state.players.get(fromAccount.owner)) {
+                        case (?name) { ?name };
+                        case null { null };
+                      };
+                    } else { null };
                   };
                   case null { null };
                 };
@@ -85,8 +100,8 @@ module {
                 };
 
                 // Handle different transfer scenarios
-                switch (sourcePlayerName, targetPlayerName) {
-                  case (?fromName, ?toName) {
+                switch (sourcePlayerName, targetPlayerName, isFromRoom) {
+                  case (?fromName, ?toName, false) {
                     // Player to player (give)
                     switch (event.from, event.to) {
                       case (?from, ?to) {
@@ -106,7 +121,7 @@ module {
                       case _ {};
                     };
                   };
-                  case (?fromName, null) {
+                  case (?fromName, null, false) {
                     // Player to room/container (drop)
                     switch (event.from) {
                       case (?from) {
@@ -124,8 +139,8 @@ module {
                       case null {};
                     };
                   };
-                  case (null, ?toName) {
-                    // Room/container to player (pick/take)
+                  case (_, ?toName, true) {
+                    // Room to player (pick/take)
                     switch (event.to) {
                       case (?to) {
                         // Message to taker
@@ -142,8 +157,11 @@ module {
                       case null {};
                     };
                   };
-                  case (null, null) {
+                  case (null, null, _) {
                     // Container to container, no messages needed
+                  };
+                  case (_, _, _) {
+                    // Other cases (shouldn't happen), no messages needed
                   };
                 };
               };
@@ -423,11 +441,8 @@ module {
               };
             };
 
-            // Create the from account using the caller's principal
-            let fromAccount : Account = {
-              owner = caller;
-              subaccount = null;
-            };
+            // Create the from account using the item's current owner
+            let fromAccount = item.owner;
 
             // Update or delete source item
             if (sourceCount == 0) {
