@@ -583,8 +583,28 @@ function App() {
       return;
     }
 
+    // Handle help command (/help or /?)
+    if (command.toLowerCase() === '/help' || command.toLowerCase() === '/?') {
+      setMessages(prev => [...prev,
+        "Available commands:",
+        "  /help, /? - Show this help message",
+        "  /say <message>, /s <message> - Say something to everyone in the room",
+        "  /whisper <player> <message>, /w <player> <message> - Send a private message to a player",
+        "  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)",
+        "  /inventory, /i - Check your inventory",
+        "  /create_room \"<name>\" \"<description>\" - Create a new room",
+        "  /create_exit \"<exit_id>\" \"<name>\" \"<description>\" <target_room_id> [\"<direction>\"] - Create an exit",
+        "  /create_item_type \"<name>\" \"<description>\" <is_container> <container_capacity> \"<icon_url>\" <stack_max> - Create an item type",
+        "  /create_item <type_id> [count] - Create an item of the specified type",
+        "  /put <item> in|into <container> - Put an item into a container",
+        "  /open <container> - Open a container",
+        "  /close <container> - Close a container"
+      ]);
+      return;
+    }
+
     // If no command matched, show error
-    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room, /create_exit, /create_item_type, /create_item, /put, /open, /close, /inventory (/i)`]);
+    setMessages(prev => [...prev, `Unknown command: ${command}. Available commands: /say (/s), /whisper (/w), /go (/g), /create_room, /create_exit, /create_item_type, /create_item, /put, /open, /close, /inventory (/i), /help (/?)`]);
   }
 
   async function createAuthenticatedActor(identity) {
