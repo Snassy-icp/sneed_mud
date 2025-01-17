@@ -1,24 +1,175 @@
-import Principal "mo:base/Principal";
+import Option "mo:base/Option";
+import Array "mo:base/Array";
+import Blob "mo:base/Blob";
+import Debug "mo:base/Debug";
+import Time "mo:base/Time";
 import Types "./Types";
 import State "./State";
 import ItemUtils "./ItemUtils";
-import Time "mo:base/Time";
+import Lib "./lib";
 import Result "mo:base/Result";
-import Debug "mo:base/Debug";
-import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
-import Array "mo:base/Array";
-import Nat8 "mo:base/Nat8";
 
 module {
+  type MudState = State.MudState;
+  type RoomId = Types.RoomId;
+  type ItemId = Types.ItemId;
   type Account = Types.Account;
   type Item = Types.Item;
-  type ItemId = Types.ItemId;
   type ItemType = Types.ItemType;
-  type ItemTypeId = Types.ItemTypeId;
-  type MudState = State.MudState;
   type ItemEvent = Types.ItemEvent;
   type ItemEventKind = Types.ItemEventKind;
+  type ItemTypeId = Types.ItemTypeId;
+
+  // Helper function to log item events
+  private func logItemEvent(state: MudState, event: ItemEvent) {
+    Debug.print("Item event: " # debug_show(event));
+    
+    switch (event.kind) {
+      case (#Transfer) {
+        // Get item details
+        switch (state.items.get(event.item_id)) {
+          case (?item) {
+            switch (state.itemTypes.get(item.type_id)) {
+              case (?itemType) {
+                // Get source player name (if from a player)
+                let sourcePlayerName = switch (event.from) {
+                  case (?fromAccount) {
+                    // For transfers, use the caller's name if they can access the item
+                    switch (state.players.get(fromAccount.owner)) {
+                      case (?name) { ?name };
+                      case null { null };
+                    };
+                  };
+                  case null { null };
+                };
+
+                // Get target player name (if to a player)
+                let targetPlayerName = switch (event.to) {
+                  case (?toAccount) {
+                    if (Option.isNull(toAccount.subaccount)) {
+                      // To player inventory
+                      switch (state.players.get(toAccount.owner)) {
+                        case (?name) { ?name };
+                        case null { null };
+                      };
+                    } else { null }; // To container or room
+                  };
+                  case null { null };
+                };
+
+                // Get room ID where this is happening
+                let roomId = switch (event.from) {
+                  case (?fromAccount) {
+                    switch (fromAccount.subaccount) {
+                      case (?subaccount) {
+                        let ownerBytes = Blob.toArray(subaccount);
+                        if (ownerBytes.size() > 1 and ownerBytes[1] == 1) {
+                          // From room
+                          ?ItemUtils.bytes_to_nat(Array.tabulate<Nat8>(
+                            ownerBytes.size() - 2,
+                            func(i) { ownerBytes[i + 2] }
+                          ));
+                        } else { null };
+                      };
+                      case null {
+                        // From player inventory, get their room
+                        switch (state.playerLocations.get(fromAccount.owner)) {
+                          case (?location) { ?location };
+                          case null { null };
+                        };
+                      };
+                    };
+                  };
+                  case null { null };
+                };
+
+                // Handle different transfer scenarios
+                switch (sourcePlayerName, targetPlayerName) {
+                  case (?fromName, ?toName) {
+                    // Player to player (give)
+                    switch (event.from, event.to) {
+                      case (?from, ?to) {
+                        // Message to giver
+                        Lib.addMessageToLog(state, from.owner, "You give " # itemType.name # " to " # toName);
+                        // Message to receiver
+                        Lib.addMessageToLog(state, to.owner, fromName # " gives you " # itemType.name);
+                        // Message to others in room
+                        switch (roomId) {
+                          case (?rid) {
+                            broadcastToRoomExcept2(state, rid, from.owner, to.owner, 
+                              fromName # " gives " # itemType.name # " to " # toName);
+                          };
+                          case null {};
+                        };
+                      };
+                      case _ {};
+                    };
+                  };
+                  case (?fromName, null) {
+                    // Player to room/container (drop)
+                    switch (event.from) {
+                      case (?from) {
+                        // Message to dropper
+                        Lib.addMessageToLog(state, from.owner, "You drop " # itemType.name);
+                        // Message to others in room
+                        switch (roomId) {
+                          case (?rid) {
+                            Lib.broadcastToRoomExcept(state, rid, from.owner, 
+                              fromName # " drops " # itemType.name);
+                          };
+                          case null {};
+                        };
+                      };
+                      case null {};
+                    };
+                  };
+                  case (null, ?toName) {
+                    // Room/container to player (pick/take)
+                    switch (event.to) {
+                      case (?to) {
+                        // Message to taker
+                        Lib.addMessageToLog(state, to.owner, "You pick up " # itemType.name);
+                        // Message to others in room
+                        switch (roomId) {
+                          case (?rid) {
+                            Lib.broadcastToRoomExcept(state, rid, to.owner, 
+                              toName # " picks up " # itemType.name);
+                          };
+                          case null {};
+                        };
+                      };
+                      case null {};
+                    };
+                  };
+                  case (null, null) {
+                    // Container to container, no messages needed
+                  };
+                };
+              };
+              case null {};
+            };
+          };
+          case null {};
+        };
+      };
+      case (#Mint) {
+        // No messages needed for item creation
+      };
+      case (#Burn) {
+        // No messages needed for item deletion
+      };
+    };
+  };
+
+  // Helper function to broadcast to room except two principals
+  private func broadcastToRoomExcept2(state: MudState, roomId: RoomId, exclude1: Principal, exclude2: Principal, content: Text) {
+    for ((principal, location) in state.playerLocations.entries()) {
+      if (location == roomId and principal != exclude1 and principal != exclude2) {
+        Lib.addMessageToLog(state, principal, content);
+      };
+    };
+  };
 
   // Create a new item type
   public func createItemType(
@@ -145,9 +296,17 @@ module {
     newOwner: Account,
     transferCount: ?Nat
   ) : Result.Result<(), Text> {
+    Debug.print("Transfer initiated: " # debug_show({
+      caller = caller;
+      itemId = itemId;
+      newOwner = newOwner;
+      transferCount = transferCount;
+    }));
+
     switch (state.items.get(itemId)) {
       case null { #err("Item not found") };
       case (?item) {
+        Debug.print("Current item state: " # debug_show(item));
         // Check if caller can access the item
         if (not ItemUtils.canAccessItem(state, itemId, caller)) {
           return #err("You don't have access to this item");
@@ -278,6 +437,12 @@ module {
               state.items.put(itemId, updatedSourceItem);
             };
 
+            // Create the from account using the caller's principal
+            let fromAccount : Account = {
+              owner = caller;
+              subaccount = null;
+            };
+
             // Create new item for target if partial transfer
             if (targetCount < item.count) {
               let newItemId = state.stable_state.nextItemId;
@@ -293,12 +458,16 @@ module {
               state.items.put(newItemId, newItem);
 
               // Log transfer event for new item
+              Debug.print("Logging partial transfer event: " # debug_show({
+                from = ?fromAccount;
+                to = ?newOwner;
+              }));
               logItemEvent(state, {
                 id = state.stable_state.nextMessageId;
                 timestamp = Time.now();
                 kind = #Transfer;
                 item_id = newItemId;
-                from = ?item.owner;
+                from = ?fromAccount;
                 to = ?newOwner;
               });
               state.stable_state.nextMessageId += 1;
@@ -314,12 +483,16 @@ module {
               state.items.put(itemId, updatedItem);
 
               // Log transfer event
+              Debug.print("Logging full transfer event: " # debug_show({
+                from = ?fromAccount;
+                to = ?newOwner;
+              }));
               logItemEvent(state, {
                 id = state.stable_state.nextMessageId;
                 timestamp = Time.now();
                 kind = #Transfer;
                 item_id = itemId;
-                from = ?item.owner;
+                from = ?fromAccount;
                 to = ?newOwner;
               });
               state.stable_state.nextMessageId += 1;
@@ -516,10 +689,4 @@ module {
       };
     }
   };
-
-  // Helper function to log item events
-  private func logItemEvent(state: MudState, event: ItemEvent) {
-    Debug.print("Item event: " # debug_show(event));
-    // TODO: Implement proper event logging when needed
-  };
-} 
+}; 

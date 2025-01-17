@@ -30,7 +30,7 @@ module {
     };
   };
 
-  private func addMessageToLog(state: MudState, p: Principal, content: Text) {
+  public func addMessageToLog(state: MudState, p: Principal, content: Text) {
     //Debug.print("Adding message for principal: " # Principal.toText(p));
     //Debug.print("Message content: " # content);
     ensureMessageLog(state, p);
@@ -49,7 +49,7 @@ module {
     };
   };
 
-  private func broadcastToRoom(state: MudState, roomId: RoomId, content: Text) {
+  public func broadcastToRoom(state: MudState, roomId: RoomId, content: Text) {
     for ((principal, location) in state.playerLocations.entries()) {
       if (location == roomId) {
         addMessageToLog(state, principal, content);
@@ -57,7 +57,7 @@ module {
     };
   };
 
-  private func broadcastToRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal, content: Text) {
+  public func broadcastToRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal, content: Text) {
     for ((principal, location) in state.playerLocations.entries()) {
       if (location == roomId and principal != excludePrincipal) {
         addMessageToLog(state, principal, content);
