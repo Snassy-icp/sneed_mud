@@ -20,6 +20,58 @@ module {
   type ItemEvent = Types.ItemEvent;
   type ItemEventKind = Types.ItemEventKind;
 
+  // Create a new item type
+  public func createItemType(
+    state: MudState,
+    caller: Principal,
+    name: Text,
+    description: Text,
+    is_container: Bool,
+    container_capacity: ?Nat,
+    icon_url: Text,
+    stack_max: Nat
+  ) : Result.Result<ItemTypeId, Text> {
+    // Check if caller is a realm owner
+    if (not State.isRealmOwner(state, caller)) {
+      return #err("Only realm owners can create item types");
+    };
+
+    // Validate stack_max
+    if (stack_max == 0) {
+      return #err("Stack max must be greater than 0");
+    };
+
+    // Validate container capacity if it's a container
+    if (is_container) {
+      switch (container_capacity) {
+        case null { return #err("Container capacity must be specified for containers") };
+        case (?cap) {
+          if (cap == 0) {
+            return #err("Container capacity must be greater than 0");
+          };
+        };
+      };
+    } else if (container_capacity != null) {
+      return #err("Container capacity should only be specified for containers");
+    };
+
+    let typeId = state.stable_state.nextItemTypeId;
+    state.stable_state.nextItemTypeId += 1;
+
+    let newItemType : ItemType = {
+      id = typeId;
+      name = name;
+      description = description;
+      is_container = is_container;
+      container_capacity = container_capacity;
+      icon_url = icon_url;
+      stack_max = stack_max;
+    };
+
+    state.itemTypes.put(typeId, newItemType);
+    #ok(typeId)
+  };
+
   // Create a new item of a given type
   public func createItem(
     state: MudState,

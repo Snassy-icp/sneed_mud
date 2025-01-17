@@ -26,6 +26,17 @@ actor class MudBackend() = this {
   };
 
   // Item management functions
+  public shared(msg) func createItemType(
+    name: Text,
+    description: Text,
+    is_container: Bool,
+    container_capacity: ?Nat,
+    icon_url: Text,
+    stack_max: Nat
+  ) : async Result.Result<ItemTypeId, Text> {
+    ItemManager.createItemType(state, msg.caller, name, description, is_container, container_capacity, icon_url, stack_max)
+  };
+
   public shared(msg) func createItem(typeId: ItemTypeId, count: ?Nat) : async Result.Result<ItemId, Text> {
     ItemManager.createItem(state, msg.caller, typeId, count)
   };
