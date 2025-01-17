@@ -236,4 +236,21 @@ actor class MudBackend() = this {
     
     #ok(Buffer.toArray(playerItems))
   };
+
+  // Get all item types
+  public query func getItemTypes() : async Result.Result<[ItemType], Text> {
+    let types = Buffer.Buffer<ItemType>(0);
+    for ((_, itemType) in state.itemTypes.entries()) {
+      types.add(itemType);
+    };
+    #ok(Buffer.toArray(types))
+  };
+
+  // Get a specific item type by ID
+  public query func getItemType(typeId: ItemTypeId) : async Result.Result<ItemType, Text> {
+    switch (state.itemTypes.get(typeId)) {
+      case null { #err("Item type not found") };
+      case (?itemType) { #ok(itemType) };
+    }
+  };
 }

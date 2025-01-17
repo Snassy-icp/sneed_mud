@@ -21,6 +21,29 @@ function App() {
   const [playersInRoom, setPlayersInRoom] = useState([]);
   const [lastMessageId, setLastMessageId] = useState(null);
 
+  // Helper function to create item subaccount
+  function createItemSubaccount(itemId) {
+    // Convert itemId to bytes
+    const bytes = [];
+    let n = BigInt(itemId);
+    // Add type byte (2 for item ownership)
+    bytes.push(0); // Version byte
+    bytes.push(2); // Type byte for item ownership
+    
+    // Add item ID bytes (big-endian)
+    while (n > 0n) {
+      bytes.unshift(Number(n & 0xFFn));
+      n = n >> 8n;
+    }
+    
+    // Pad to 32 bytes
+    while (bytes.length < 32) {
+      bytes.unshift(0);
+    }
+    
+    return Array.from(bytes); // Return as regular array of numbers
+  }
+
   // Direction aliases mapping
   const DIRECTION_ALIASES = {
     'n': 'north',
@@ -92,15 +115,15 @@ function App() {
         
         // Filter items whose names start with the partial name
         const matches = items.filter(item => {
-          const itemTypeName = item.type.name.toLowerCase();
+          const itemTypeName = item.item_type.name.toLowerCase();
           return itemTypeName.startsWith(normalizedSearch);
         });
 
         // Return the ID if exactly one match is found
         if (matches.length === 1) {
-          return { id: matches[0].id, name: matches[0].type.name };
+          return { id: matches[0].id, name: matches[0].item_type.name };
         } else if (matches.length > 1) {
-          throw new Error(`Multiple matches found: ${matches.map(m => m.type.name).join(', ')}`);
+          throw new Error(`Multiple matches found: ${matches.map(m => m.item_type.name).join(', ')}`);
         }
       }
       // Try parsing as ID if no name matches
@@ -323,39 +346,60 @@ function App() {
       const argsString = command.substring(command.indexOf(' ') + 1).trim();
       
       try {
-        const matches = argsString.match(/(\d+)(?:\s*,\s*(\d+))?/);
+        // Match either "item name" count or typeId count
+        const matches = argsString.match(/(?:"([^"]+)"|\b(\d+)\b)(?:\s*,?\s*(\d+)?)?/);
         if (!matches) {
-          setMessages(prev => [...prev, "Error: Create item command format is '/create_item type_id[, count]'"]);
+          setMessages(prev => [...prev, "Error: Create item command format is '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'"]);
           return;
         }
         
-        const [_, typeId, count] = matches;
-        try {
-          // First verify the item type exists and get its name
-          const typeResult = await authenticatedActor.getItemType(parseInt(typeId));
-          if ('err' in typeResult) {
-            setMessages(prev => [...prev, `Error: ${typeResult.err}`]);
+        const [_, quotedName, typeIdStr, count] = matches;
+        let typeId;
+
+        // First determine the type ID either from name or direct ID
+        if (quotedName) {
+          // Search by name
+          const typesResult = await authenticatedActor.getItemTypes();
+          if ('ok' in typesResult) {
+            const matchingType = typesResult.ok.find(type => 
+              type.name.toLowerCase() === quotedName.toLowerCase()
+            );
+            if (!matchingType) {
+              setMessages(prev => [...prev, `Error: No item type found with name "${quotedName}"`]);
+              return;
+            }
+            typeId = matchingType.id;
+          } else {
+            setMessages(prev => [...prev, `Error: Failed to get item types`]);
             return;
           }
-          const typeName = typeResult.ok.name;
+        } else {
+          // Use provided type ID
+          typeId = parseInt(typeIdStr);
+        }
 
-          // Now create the item
-          const result = await authenticatedActor.createItem(
-            parseInt(typeId),
-            count ? [parseInt(count)] : []
-          );
-          if ('ok' in result) {
-            const countStr = count ? ` (x${count})` : '';
-            setMessages(prev => [...prev, `Successfully created ${typeName}${countStr} with ID ${result.ok}`]);
-          } else if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
-          }
-        } catch (error) {
-          console.error("Error creating item:", error);
-          setMessages(prev => [...prev, `Error: Failed to create item - ${error.message || 'Unknown error'}`]);
+        // Verify the type exists and get its name
+        const typeResult = await authenticatedActor.getItemType(typeId);
+        if ('err' in typeResult) {
+          setMessages(prev => [...prev, `Error: ${typeResult.err}`]);
+          return;
+        }
+        const typeName = typeResult.ok.name;
+
+        // Create the item
+        const result = await authenticatedActor.createItem(
+          typeId,
+          count ? [parseInt(count)] : []
+        );
+        if ('ok' in result) {
+          const countStr = count ? ` (x${count})` : '';
+          setMessages(prev => [...prev, `Successfully created ${typeName}${countStr} with ID ${result.ok}`]);
+        } else if ('err' in result) {
+          setMessages(prev => [...prev, `Error: ${result.err}`]);
         }
       } catch (error) {
-        setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_item type_id[, count]'"]);
+        console.error("Error creating item:", error);
+        setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'"]);
       }
       return;
     }
@@ -383,7 +427,7 @@ function App() {
 
           const targetAccount = {
             owner: await authenticatedActor.getCanisterPrincipal(),
-            subaccount: [ItemUtils.createItemSubaccount(container.id)]
+            subaccount: [createItemSubaccount(container.id)]
           };
 
           const result = await authenticatedActor.transferItem(
