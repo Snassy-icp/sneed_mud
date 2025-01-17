@@ -423,6 +423,12 @@ module {
               };
             };
 
+            // Create the from account using the caller's principal
+            let fromAccount : Account = {
+              owner = caller;
+              subaccount = null;
+            };
+
             // Update or delete source item
             if (sourceCount == 0) {
               state.items.delete(itemId);
@@ -437,16 +443,12 @@ module {
               state.items.put(itemId, updatedSourceItem);
             };
 
-            // Create the from account using the caller's principal
-            let fromAccount : Account = {
-              owner = caller;
-              subaccount = null;
-            };
-
             // Create new item for target if partial transfer
+            var targetItemId = itemId;
             if (targetCount < item.count) {
               let newItemId = state.stable_state.nextItemId;
               state.stable_state.nextItemId += 1;
+              targetItemId := newItemId;
 
               let newItem : Item = {
                 id = newItemId;
@@ -456,21 +458,6 @@ module {
                 count = targetCount;
               };
               state.items.put(newItemId, newItem);
-
-              // Log transfer event for new item
-              Debug.print("Logging partial transfer event: " # debug_show({
-                from = ?fromAccount;
-                to = ?newOwner;
-              }));
-              logItemEvent(state, {
-                id = state.stable_state.nextMessageId;
-                timestamp = Time.now();
-                kind = #Transfer;
-                item_id = newItemId;
-                from = ?fromAccount;
-                to = ?newOwner;
-              });
-              state.stable_state.nextMessageId += 1;
             } else {
               // Full transfer - update existing item
               let updatedItem : Item = {
@@ -481,22 +468,22 @@ module {
                 count = targetCount;
               };
               state.items.put(itemId, updatedItem);
-
-              // Log transfer event
-              Debug.print("Logging full transfer event: " # debug_show({
-                from = ?fromAccount;
-                to = ?newOwner;
-              }));
-              logItemEvent(state, {
-                id = state.stable_state.nextMessageId;
-                timestamp = Time.now();
-                kind = #Transfer;
-                item_id = itemId;
-                from = ?fromAccount;
-                to = ?newOwner;
-              });
-              state.stable_state.nextMessageId += 1;
             };
+
+            // Log transfer event
+            Debug.print("Logging transfer event: " # debug_show({
+              from = ?fromAccount;
+              to = ?newOwner;
+            }));
+            logItemEvent(state, {
+              id = state.stable_state.nextMessageId;
+              timestamp = Time.now();
+              kind = #Transfer;
+              item_id = targetItemId;
+              from = ?fromAccount;
+              to = ?newOwner;
+            });
+            state.stable_state.nextMessageId += 1;
 
             #ok(())
           };

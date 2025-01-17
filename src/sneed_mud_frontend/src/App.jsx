@@ -1047,9 +1047,7 @@ function App() {
             count === item.count ? [] : [count]
           );
           
-          if ('ok' in result) {
-            setMessages(prev => [...prev, `You drop ${item.name}`]);
-          } else if ('err' in result) {
+          if ('err' in result) {
             setMessages(prev => [...prev, `Error: ${result.err}`]);
           }
         } catch (error) {
@@ -1149,14 +1147,7 @@ function App() {
             count === item.count ? [] : [count]
           );
           
-          if ('ok' in result) {
-            // Message for the giver is automatically added to their log
-            setMessages(prev => [...prev, `You give ${item.name} to ${targetPlayer[1]}`]);
-            
-            // Backend will handle messages for:
-            // - Receiver: "PlayerName1 gives you Book of Sneed"
-            // - Others: "PlayerName1 gives Book of Sneed to PlayerName2"
-          } else if ('err' in result) {
+          if ('err' in result) {
             setMessages(prev => [...prev, `Error: ${result.err}`]);
           }
         } catch (error) {
