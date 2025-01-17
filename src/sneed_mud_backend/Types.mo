@@ -101,4 +101,24 @@ module {
     count : Nat;
     is_open : Bool;
   };
+
+  // Stats that change frequently (HP, MP, XP)
+  public type DynamicStats = {
+    hp: Nat;
+    mp: Nat;
+    xp: Nat;
+  };
+
+  // Stats that change rarely (level, max values)
+  public type BaseStats = {
+    level: Nat;
+    maxHp: Nat;
+    maxMp: Nat;
+  };
+
+  // Combined player stats for queries
+  public type PlayerStats = {
+    base: BaseStats;
+    dynamic: DynamicStats;
+  };
 } 

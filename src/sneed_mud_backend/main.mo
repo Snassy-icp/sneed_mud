@@ -298,4 +298,30 @@ actor class MudBackend() = this {
   public shared(msg) func whisper(targetName: Text, message: Text) : async Result.Result<(), Text> {
     Lib.whisper(state, msg.caller, targetName, message)
   };
+
+  // Character creation and stats
+  public shared(msg) func createCharacter() : async Result.Result<(), Text> {
+    Lib.createCharacter(state, msg.caller)
+  };
+
+  public shared(msg) func getStats() : async Result.Result<Types.PlayerStats, Text> {
+    Lib.getPlayerStats(state, msg.caller)
+  };
+
+  // Update look command to show player stats
+  public shared(msg) func lookAtPlayer(targetName: Text) : async Result.Result<Text, Text> {
+    // First check if the target exists
+    switch (state.usedNames.get(targetName)) {
+      case null { #err("Player not found") };
+      case (?targetPrincipal) {
+        // Get target's stats
+        switch (Lib.getPlayerStats(state, targetPrincipal)) {
+          case (#err(e)) { #err(e) };
+          case (#ok(stats)) {
+            #ok(targetName # "\n" # Lib.formatPlayerStatsForOthers(stats))
+          };
+        }
+      };
+    }
+  };
 }

@@ -7,6 +7,8 @@ import Hash "mo:base/Hash";
 import Nat "mo:base/Nat";
 import Iter "mo:base/Iter";
 import BufferUtils "./BufferUtils";
+import Float "mo:base/Float";
+import Int "mo:base/Int";
 
 module {
   public type StableState = {
@@ -22,6 +24,8 @@ module {
     var stableMessageLogs: [(Principal, Types.StableCircularBuffer)];
     var stableItemTypes: [(Types.ItemTypeId, Types.ItemType)];
     var stableItems: [(Types.ItemId, Types.Item)];
+    var stablePlayerBaseStats: [(Principal, Types.BaseStats)];
+    var stablePlayerDynamicStats: [(Principal, Types.DynamicStats)];
   };
 
   public type MudState = {
@@ -34,27 +38,32 @@ module {
     items: HashMap.HashMap<Types.ItemId, Types.Item>;
     stable_state: StableState;
     var realmConfig: Types.RealmConfig;
+    playerBaseStats: HashMap.HashMap<Principal, Types.BaseStats>;
+    playerDynamicStats: HashMap.HashMap<Principal, Types.DynamicStats>;
   };
 
   public func initStable() : StableState {
-    {
+    let state : StableState = {
       var nextRoomId = 0;
       var nextMessageId = 0;
       var nextItemTypeId = 0;
       var nextItemId = 0;
-      var stableRooms = [];
-      var stablePlayers = [];
-      var stableUsedNames = [];
-      var stablePlayerLocations = [];
+      var stableRooms = [] : [(Types.RoomId, Types.Room)];
+      var stablePlayers = [] : [(Principal, Text)];
+      var stableUsedNames = [] : [(Text, Principal)];
+      var stablePlayerLocations = [] : [(Principal, Types.RoomId)];
       var stableRealmConfig = {
         name = "Default Realm";
         description = "A new realm awaiting configuration";
         owners = [Principal.fromText("2vxsx-fae")];
       };
-      var stableMessageLogs = [];
-      var stableItemTypes = [];
-      var stableItems = [];
-    }
+      var stableMessageLogs = [] : [(Principal, Types.StableCircularBuffer)];
+      var stableItemTypes = [] : [(Types.ItemTypeId, Types.ItemType)];
+      var stableItems = [] : [(Types.ItemId, Types.Item)];
+      var stablePlayerBaseStats = [] : [(Principal, Types.BaseStats)];
+      var stablePlayerDynamicStats = [] : [(Principal, Types.DynamicStats)];
+    };
+    state
   };
 
   public func init(stable_state: StableState) : MudState {
@@ -105,6 +114,20 @@ module {
       Hash.hash
     );
 
+    let playerBaseStats = HashMap.fromIter<Principal, Types.BaseStats>(
+      stable_state.stablePlayerBaseStats.vals(),
+      0,
+      Principal.equal,
+      Principal.hash
+    );
+
+    let playerDynamicStats = HashMap.fromIter<Principal, Types.DynamicStats>(
+      stable_state.stablePlayerDynamicStats.vals(),
+      0,
+      Principal.equal,
+      Principal.hash
+    );
+
     {
       rooms = rooms;
       players = players;
@@ -115,6 +138,8 @@ module {
       items = items;
       stable_state = stable_state;
       var realmConfig = stable_state.stableRealmConfig;
+      playerBaseStats = playerBaseStats;
+      playerDynamicStats = playerDynamicStats;
     }
   };
 
@@ -133,7 +158,7 @@ module {
       stableMessageLogs.add((principal, stableBuffer));
     };
 
-    {
+    let stableState : StableState = {
       var nextRoomId = state.stable_state.nextRoomId;
       var nextMessageId = state.stable_state.nextMessageId;
       var nextItemTypeId = state.stable_state.nextItemTypeId;
@@ -146,7 +171,10 @@ module {
       var stableMessageLogs = Buffer.toArray(stableMessageLogs);
       var stableItemTypes = Iter.toArray(state.itemTypes.entries());
       var stableItems = Iter.toArray(state.items.entries());
-    }
+      var stablePlayerBaseStats = Iter.toArray(state.playerBaseStats.entries());
+      var stablePlayerDynamicStats = Iter.toArray(state.playerDynamicStats.entries());
+    };
+    stableState
   };
 
   // Helper functions for ownership checks
@@ -184,5 +212,19 @@ module {
   // Helper function to convert buffer to array
   public func bufferToArray<T>(buffer: Buffer.Buffer<T>) : [T] {
     Buffer.toArray(buffer)
+  };
+
+  // Helper function to calculate XP needed for next level
+  public func xpForNextLevel(currentLevel: Nat) : Nat {
+    // Special case for level 1->2
+    if (currentLevel == 1) {
+      return 2000;
+    };
+    
+    // Original formula: 55.6 * (level ^ 2) - (471.2 * level) + 5256.5
+    // Multiplied by 10 to maintain precision with integer math
+    let level_squared = currentLevel * currentLevel;
+    let xp_int = (556 * level_squared) / 10 - (4712 * currentLevel) / 10 + 52565 / 10;
+    Int.abs(xp_int)
   };
 } 

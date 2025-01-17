@@ -340,13 +340,20 @@ module {
   };
 
   // Player management functions
-  public func registerPlayerName(state: MudState, caller: Principal, name : Text) : Result.Result<Text, Text> {
+  public func registerPlayerName(state: MudState, caller: Principal, name: Text) : Result.Result<Text, Text> {
     // Check if name is empty or too long
     if (Text.size(name) == 0) {
       return #err("Name cannot be empty");
     };
     if (Text.size(name) > 20) {
       return #err("Name cannot be longer than 20 characters");
+    };
+
+    // Check if name contains spaces
+    for (char in name.chars()) {
+      if (char == ' ') {
+        return #err("Player names cannot contain spaces");
+      };
     };
 
     // Check if name is already taken
@@ -673,5 +680,61 @@ module {
       };
     };
     Buffer.toArray(ownedRooms)
+  };
+
+  // Character creation and stats functions
+  public func createCharacter(state: MudState, caller: Principal) : Result.Result<(), Text> {
+    // Check if character already exists
+    switch (state.playerBaseStats.get(caller)) {
+      case (?_) { #err("Character already exists") };
+      case null {
+        // Initialize base stats
+        let baseStats : Types.BaseStats = {
+          level = 1;
+          maxHp = 100;
+          maxMp = 100;
+        };
+        
+        // Initialize dynamic stats
+        let dynamicStats : Types.DynamicStats = {
+          hp = 100;
+          mp = 100;
+          xp = 0;
+        };
+
+        state.playerBaseStats.put(caller, baseStats);
+        state.playerDynamicStats.put(caller, dynamicStats);
+
+        // Notify the player
+        addMessageToLog(state, caller, "Character created! Use /stats to view your stats.");
+        #ok(())
+      };
+    }
+  };
+
+  public func getPlayerStats(state: MudState, caller: Principal) : Result.Result<Types.PlayerStats, Text> {
+    switch (state.playerBaseStats.get(caller), state.playerDynamicStats.get(caller)) {
+      case (?base, ?dynamic) {
+        #ok({ base = base; dynamic = dynamic; })
+      };
+      case (_, _) { #err("Character not found. Use /create to create a character.") };
+    }
+  };
+
+  public func formatPlayerStats(stats: Types.PlayerStats) : Text {
+    let nextLevelXp = State.xpForNextLevel(stats.base.level);
+    let xpNeeded = nextLevelXp - stats.dynamic.xp;
+    
+    "Level: " # Nat.toText(stats.base.level) # "\n" #
+    "HP: " # Nat.toText(stats.dynamic.hp) # "/" # Nat.toText(stats.base.maxHp) # "\n" #
+    "MP: " # Nat.toText(stats.dynamic.mp) # "/" # Nat.toText(stats.base.maxMp) # "\n" #
+    "XP: " # Nat.toText(stats.dynamic.xp) # "/" # Nat.toText(nextLevelXp) # 
+    " (" # Nat.toText(xpNeeded) # " more needed for next level)"
+  };
+
+  public func formatPlayerStatsForOthers(stats: Types.PlayerStats) : Text {
+    "Level " # Nat.toText(stats.base.level) # "\n" #
+    "HP: " # Nat.toText(stats.dynamic.hp) # "/" # Nat.toText(stats.base.maxHp) # "\n" #
+    "MP: " # Nat.toText(stats.dynamic.mp) # "/" # Nat.toText(stats.base.maxMp)
   };
 } 
