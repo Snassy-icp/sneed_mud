@@ -627,11 +627,92 @@ function App() {
       return;
     }
 
+    // Handle look command (/look)
+    if (command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
+      try {
+        // Display room information
+        if (!currentRoom) {
+          setMessages(prev => [...prev, "You can't see anything."]);
+          return;
+        }
+
+        // Start with room description
+        const roomMessages = [
+          `${currentRoom.name}`,
+          currentRoom.description,
+          ""  // Empty line for spacing
+        ];
+
+        // Add players in room
+        if (playersInRoom.length > 0) {
+          const otherPlayers = playersInRoom.filter(([principal, name]) => name !== playerName);
+          if (otherPlayers.length > 0) {
+            roomMessages.push("You see:");
+            otherPlayers.forEach(([_, name]) => {
+              roomMessages.push(`  ${name} is here.`);
+            });
+            roomMessages.push("");  // Empty line for spacing
+          }
+        }
+
+        // Add items in room
+        const itemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
+        if ('ok' in itemsResult) {
+          const items = itemsResult.ok;
+          if (items.length > 0) {
+            // Group items by type and count
+            const groupedItems = items.reduce((acc, item) => {
+              const key = `${item.item_type.id}-${item.item_type.name}`;
+              if (!acc[key]) {
+                acc[key] = {
+                  type: item.item_type,
+                  count: item.count,
+                  isOpen: item.is_open
+                };
+              } else {
+                acc[key].count += item.count;
+              }
+              return acc;
+            }, {});
+
+            roomMessages.push("You also see:");
+            Object.values(groupedItems).forEach(group => {
+              const countStr = group.count > 1 ? ` (x${group.count})` : '';
+              const containerStatus = group.type.is_container ? 
+                ` [${group.isOpen ? 'open' : 'closed'}]` : 
+                '';
+              roomMessages.push(`  ${group.type.name}${countStr}${containerStatus}`);
+            });
+            roomMessages.push("");  // Empty line for spacing
+          }
+        }
+
+        // Add exits
+        if (currentRoom.exits && currentRoom.exits.length > 0) {
+          roomMessages.push("Obvious exits:");
+          currentRoom.exits.forEach(([exitId, exit]) => {
+            const directionStr = exit.direction ? ` (${exit.direction})` : '';
+            roomMessages.push(`  ${exit.name}${directionStr}`);
+          });
+        } else {
+          roomMessages.push("There are no obvious exits.");
+        }
+
+        // Update the message log with all room information
+        setMessages(prev => [...prev, ...roomMessages]);
+      } catch (error) {
+        console.error("Error looking around:", error);
+        setMessages(prev => [...prev, `Error: Failed to look around - ${error.message || 'Unknown error'}`]);
+      }
+      return;
+    }
+
     // Handle help command (/help or /?)
     if (command.toLowerCase() === '/help' || command.toLowerCase() === '/?') {
       setMessages(prev => [...prev,
         "Available commands:",
         "  /help, /? - Show this help message",
+        "  /look, /l - Look around the room",
         "  /say <message>, /s <message> - Say something to everyone in the room",
         "  /whisper <player> <message>, /w <player> <message> - Send a private message to a player",
         "  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)",

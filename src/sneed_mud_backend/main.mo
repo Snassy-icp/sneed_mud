@@ -7,24 +7,10 @@ import ItemManager "./ItemManager";
 import Debug "mo:base/Debug";
 import Buffer "mo:base/Buffer";
 import Option "mo:base/Option";
+import ItemUtils "./ItemUtils";
 
 actor class MudBackend() = this {
-  type Room = Types.Room;
-  type RoomId = Types.RoomId;
-  type LogMessage = Types.LogMessage;
-  type MessageId = Types.MessageId;
-  type ItemId = Types.ItemId;
-  type ItemTypeId = Types.ItemTypeId;
-  type ItemType = Types.ItemType;
-  type Account = Types.Account;
-
-  // Item query types
-  type ItemInfo = {
-    id: ItemId;
-    item_type: ItemType;
-    count: Nat;
-    is_open: Bool;
-  };
+  let starting_room : Types.RoomId = 0;
 
   private stable var stable_state : State.StableState = State.initStable();
   private var state : State.MudState = State.init(stable_state);
@@ -45,80 +31,80 @@ actor class MudBackend() = this {
     container_capacity: ?Nat,
     icon_url: Text,
     stack_max: Nat
-  ) : async Result.Result<ItemTypeId, Text> {
+  ) : async Result.Result<Types.ItemTypeId, Text> {
     ItemManager.createItemType(state, msg.caller, name, description, is_container, container_capacity, icon_url, stack_max)
   };
 
-  public shared(msg) func createItem(typeId: ItemTypeId, count: ?Nat) : async Result.Result<ItemId, Text> {
+  public shared(msg) func createItem(typeId: Types.ItemTypeId, count: ?Nat) : async Result.Result<Types.ItemId, Text> {
     ItemManager.createItem(state, msg.caller, typeId, count)
   };
 
-  public shared(msg) func transferItem(itemId: ItemId, newOwner: Account, transferCount: ?Nat) : async Result.Result<(), Text> {
+  public shared(msg) func transferItem(itemId: Types.ItemId, newOwner: Types.Account, transferCount: ?Nat) : async Result.Result<(), Text> {
     ItemManager.transferItem(state, msg.caller, itemId, newOwner, transferCount)
   };
 
-  public shared(msg) func deleteItem(itemId: ItemId) : async Result.Result<(), Text> {
+  public shared(msg) func deleteItem(itemId: Types.ItemId) : async Result.Result<(), Text> {
     ItemManager.deleteItem(state, msg.caller, itemId)
   };
 
   // Container management functions
-  public shared(msg) func toggleContainer(containerId: ItemId) : async Result.Result<Bool, Text> {
+  public shared(msg) func toggleContainer(containerId: Types.ItemId) : async Result.Result<Bool, Text> {
     ItemManager.toggleContainer(state, msg.caller, containerId)
   };
 
-  public shared(msg) func getContainerContents(containerId: ItemId) : async Result.Result<[ItemId], Text> {
+  public shared(msg) func getContainerContents(containerId: Types.ItemId) : async Result.Result<[Types.ItemId], Text> {
     ItemManager.getContainerContents(state, msg.caller, containerId)
   };
 
-  public query func hasContainerSpace(containerId: ItemId) : async Result.Result<Bool, Text> {
+  public query func hasContainerSpace(containerId: Types.ItemId) : async Result.Result<Bool, Text> {
     ItemManager.hasContainerSpace(state, containerId)
   };
 
   // Existing functions...
-  public query(msg) func getMessages(afterId: ?MessageId) : async [LogMessage] {
+  public query(msg) func getMessages(afterId: ?Types.MessageId) : async [Types.LogMessage] {
     Lib.getMessages(state, msg.caller, afterId)
   };
 
-  public query func test_getMessages(principal : Principal, afterId: ?MessageId) : async [LogMessage] {
+  public query func test_getMessages(principal : Principal, afterId: ?Types.MessageId) : async [Types.LogMessage] {
     Lib.getMessages(state, principal, afterId)
   };
 
-  public shared(msg) func createRoom(name: Text, description: Text) : async Result.Result<RoomId, Text> {
+  public shared(msg) func createRoom(name: Text, description: Text) : async Result.Result<Types.RoomId, Text> {
     Lib.createRoom(state, msg.caller, name, description)
   };
 
-  public shared(msg) func updateRoom(roomId: RoomId, name: Text, description: Text) : async Result.Result<(), Text> {
+  public shared(msg) func updateRoom(roomId: Types.RoomId, name: Text, description: Text) : async Result.Result<(), Text> {
     Lib.updateRoom(state, msg.caller, roomId, name, description)
   };
 
   public shared(msg) func updateExit(
-    fromRoomId: RoomId,
+    fromRoomId: Types.RoomId,
     exitId: Text,
     name: Text,
     description: Text,
-    targetRoomId: RoomId,
+    targetRoomId: Types.RoomId,
     direction: ?Text
   ) : async Result.Result<(), Text> {
     Lib.updateExit(state, msg.caller, fromRoomId, exitId, name, description, targetRoomId, direction)
   };
 
   public shared(msg) func addExit(
-    fromRoomId: RoomId, 
+    fromRoomId: Types.RoomId, 
     exitId: Text,
     name: Text, 
     description: Text, 
-    targetRoomId: RoomId,
+    targetRoomId: Types.RoomId,
     direction: ?Text
   ) : async Result.Result<(), Text> {
     Lib.addExit(state, msg.caller, fromRoomId, exitId, name, description, targetRoomId, direction)
   };
 
   // Room ownership management
-  public shared(msg) func addRoomOwner(roomId: RoomId, newOwner: Principal) : async Result.Result<(), Text> {
+  public shared(msg) func addRoomOwner(roomId: Types.RoomId, newOwner: Principal) : async Result.Result<(), Text> {
     Lib.addRoomOwner(state, msg.caller, roomId, newOwner)
   };
 
-  public shared(msg) func removeRoomOwner(roomId: RoomId, ownerToRemove: Principal) : async Result.Result<(), Text> {
+  public shared(msg) func removeRoomOwner(roomId: Types.RoomId, ownerToRemove: Principal) : async Result.Result<(), Text> {
     Lib.removeRoomOwner(state, msg.caller, roomId, ownerToRemove)
   };
 
@@ -131,21 +117,21 @@ actor class MudBackend() = this {
     State.isRealmOwner(state, principal)
   };
 
-  public query func isRoomOwner(roomId: RoomId, principal: Principal) : async Bool {
+  public query func isRoomOwner(roomId: Types.RoomId, principal: Principal) : async Bool {
     switch (state.rooms.get(roomId)) {
       case null { false };
       case (?room) { State.isRoomOwner(room, principal) };
     }
   };
 
-  public query func getRoomOwners(roomId: RoomId) : async Result.Result<[Principal], Text> {
+  public query func getRoomOwners(roomId: Types.RoomId) : async Result.Result<[Principal], Text> {
     switch (state.rooms.get(roomId)) {
       case null { #err("Room not found") };
       case (?room) { #ok(room.owners) };
     }
   };
 
-  public query func getRoom(roomId: RoomId) : async ?Room {
+  public query func getRoom(roomId: Types.RoomId) : async ?Types.Room {
     state.rooms.get(roomId)
   };
 
@@ -170,19 +156,19 @@ actor class MudBackend() = this {
     };
   };
 
-  public query(msg) func getCurrentRoom() : async Result.Result<Room, Text> {
+  public query(msg) func getCurrentRoom() : async Result.Result<Types.Room, Text> {
     Lib.getCurrentRoom(state, msg.caller)
   };
 
-  public shared(msg) func useExit(exitId: Text) : async Result.Result<Room, Text> {
+  public shared(msg) func useExit(exitId: Text) : async Result.Result<Types.Room, Text> {
     Lib.useExit(state, msg.caller, exitId)
   };
 
-  public shared(msg) func test_useExit(principal : Principal, exitId: Text) : async Result.Result<Room, Text> {
+  public shared(msg) func test_useExit(principal : Principal, exitId: Text) : async Result.Result<Types.Room, Text> {
     Lib.useExit(state, principal, exitId)
   };
 
-  public shared(msg) func getPlayersInRoom(roomId: RoomId) : async Result.Result<[(Principal, Text)], Text> {
+  public shared(msg) func getPlayersInRoom(roomId: Types.RoomId) : async Result.Result<[(Principal, Text)], Text> {
     Lib.getPlayersInRoom(state, roomId)
   };
 
@@ -204,7 +190,7 @@ actor class MudBackend() = this {
   };
 
   // Room ownership queries
-  public query func getOwnedRooms(principal: Principal) : async [(RoomId, Room)] {
+  public query func getOwnedRooms(principal: Principal) : async [(Types.RoomId, Types.Room)] {
     Lib.getOwnedRooms(state, principal)
   };
 
@@ -214,8 +200,8 @@ actor class MudBackend() = this {
   };
 
   // Get items in player's inventory
-  public shared(msg) func getItems() : async Result.Result<[ItemInfo], Text> {
-    let playerItems = Buffer.Buffer<ItemInfo>(0);
+  public shared(msg) func getItems() : async Result.Result<[Types.ItemInfo], Text> {
+    let playerItems = Buffer.Buffer<Types.ItemInfo>(0);
     
     for ((itemId, item) in state.items.entries()) {
       // Check if item is owned by the player (no subaccount means player inventory)
@@ -237,9 +223,35 @@ actor class MudBackend() = this {
     #ok(Buffer.toArray(playerItems))
   };
 
+  // Get items in a room
+  public shared(msg) func getRoomItems(roomId: Types.RoomId) : async Result.Result<[Types.ItemInfo], Text> {
+    let roomItems = Buffer.Buffer<Types.ItemInfo>(0);
+    let roomSubaccount = ItemUtils.createRoomSubaccount(roomId);
+    
+    for ((itemId, item) in state.items.entries()) {
+      // Check if item is owned by the room
+      if (Principal.equal(item.owner.owner, Principal.fromActor(this)) and 
+          item.owner.subaccount == ?roomSubaccount) {
+        switch (state.itemTypes.get(item.type_id)) {
+          case null { /* Skip items with invalid type */ };
+          case (?itemType) {
+            roomItems.add({
+              id = item.id;
+              item_type = itemType;
+              count = item.count;
+              is_open = item.is_open;
+            });
+          };
+        };
+      };
+    };
+    
+    #ok(Buffer.toArray(roomItems))
+  };
+
   // Get all item types
-  public query func getItemTypes() : async Result.Result<[ItemType], Text> {
-    let types = Buffer.Buffer<ItemType>(0);
+  public query func getItemTypes() : async Result.Result<[Types.ItemType], Text> {
+    let types = Buffer.Buffer<Types.ItemType>(0);
     for ((_, itemType) in state.itemTypes.entries()) {
       types.add(itemType);
     };
@@ -247,7 +259,7 @@ actor class MudBackend() = this {
   };
 
   // Get a specific item type by ID
-  public query func getItemType(typeId: ItemTypeId) : async Result.Result<ItemType, Text> {
+  public query func getItemType(typeId: Types.ItemTypeId) : async Result.Result<Types.ItemType, Text> {
     switch (state.itemTypes.get(typeId)) {
       case null { #err("Item type not found") };
       case (?itemType) { #ok(itemType) };
