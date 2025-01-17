@@ -1010,6 +1010,7 @@ function App() {
       /put <item> in|into <container> - Put an item into a container
       /pick <item> [count], /take <item> [count] - Pick up an item from the room
       /drop <item> [count] - Drop an item in the current room
+      /give <item> to <player> [count] - Give an item to another player
       /inventory, /i - Show your inventory`]);
       return;
     }
@@ -1104,6 +1105,57 @@ function App() {
         }
       } catch (error) {
         setMessages(prev => [...prev, "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'"]);
+      }
+      return;
+    }
+
+    // Handle give command (/give)
+    if (command.toLowerCase().startsWith('/give ')) {
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      // Match format: item to player [count]
+      const matches = argsString.match(/^(.+?)\s+to\s+(.+?)(?:\s+(\d+))?$/);
+      if (!matches) {
+        setMessages(prev => [...prev, "Error: Give command format is '/give <item> to <player>' or '/give <item> to <player> <count>'"]);
+        return;
+      }
+      
+      const [_, itemStr, targetPlayerName, countStr] = matches;
+      const count = countStr ? parseInt(countStr) : 1;
+      
+      // First check if target player is in the room (exact match)
+      const targetPlayer = playersInRoom.find(([_, name]) => name === targetPlayerName);
+      
+      if (!targetPlayer) {
+        setMessages(prev => [...prev, `Error: ${targetPlayerName} is not in the room`]);
+        return;
+      }
+
+      // Find matching item (inventory only, including open containers)
+      const item = await findMatchingItem(itemStr, true);
+      
+      // Create target account (player's inventory)
+      const targetAccount = {
+        owner: targetPlayer[0],
+        subaccount: []
+      };
+
+      // Transfer item to target player
+      const result = await authenticatedActor.transferItem(
+        item.id,
+        targetAccount,
+        count === item.count ? [] : [count]
+      );
+      
+      if ('ok' in result) {
+        // Message for the giver is automatically added to their log
+        setMessages(prev => [...prev, `You give ${item.name} to ${targetPlayer[1]}`]);
+        
+        // Backend will handle messages for:
+        // - Receiver: "PlayerName1 gives you Book of Sneed"
+        // - Others: "PlayerName1 gives Book of Sneed to PlayerName2"
+      } else if ('err' in result) {
+        setMessages(prev => [...prev, `Error: ${result.err}`]);
       }
       return;
     }
