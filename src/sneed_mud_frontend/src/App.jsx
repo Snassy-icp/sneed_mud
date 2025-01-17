@@ -1000,18 +1000,33 @@ function App() {
     // Handle help command (/help or /?)
     if (command === '/help' || command === '/?') {
       setMessages(prev => [...prev, `Available commands:
-      /help, /? - Show this help message
-      /look, /l - Look around the room
-      /look <item> - Look at an item in your inventory or the room
-      /go <exit>, /g <exit> - Move through an exit
-      /say <message>, /s <message> - Say something to everyone in the room
-      /whisper <player> <message>, /w <player> <message> - Send a private message to a player
-      /open <container> - Open a container
-      /put <item> in|into <container> - Put an item into a container
-      /pick <item> [count], /take <item> [count] - Pick up an item from the room
-      /drop <item> [count] - Drop an item in the current room
-      /give <item> to <player> [count] - Give an item to another player
-      /inventory, /i - Show your inventory`]);
+Movement:
+  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)
+
+Communication:
+  /say <message>, /s <message> - Say something to everyone in the room
+  /whisper <player> <message>, /w <player> <message> - Send a private message to a player
+
+Items:
+  /inventory, /i - Show your inventory
+  /look [item], /l [item] - Look around the room or examine a specific item
+  /pick <item> [count], /take <item> [count] - Pick up an item from the room
+  /drop <item> [count] - Drop an item in the current room
+  /give <item> to <player> [count] - Give an item to another player
+
+Containers:
+  /open <container> - Open a container
+  /close <container> - Close a container
+  /put <item> in|into <container> - Put an item into a container
+
+Admin Commands (Realm Owners only):
+  /create_room "Room Name", "Room Description" - Create a new room
+  /create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"] - Create an exit in current room
+  /create_item_type "Name", "Description", is_container, container_capacity, "icon_url", stack_max - Create a new item type
+  /create_item "Item Name"|type_id [count] - Create a new item
+
+Help:
+  /help, /? - Show this help message`]);
       return;
     }
 
