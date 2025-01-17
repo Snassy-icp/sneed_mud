@@ -3,12 +3,16 @@ import Result "mo:base/Result";
 import Types "./Types";
 import State "./State";
 import Lib "./lib";
+import ItemManager "./ItemManager";
 
 actor class MudBackend() = this {
   type Room = Types.Room;
   type RoomId = Types.RoomId;
   type LogMessage = Types.LogMessage;
   type MessageId = Types.MessageId;
+  type ItemId = Types.ItemId;
+  type ItemTypeId = Types.ItemTypeId;
+  type Account = Types.Account;
 
   private stable var stable_state : State.StableState = State.initStable();
   private var state : State.MudState = State.init(stable_state);
@@ -21,6 +25,33 @@ actor class MudBackend() = this {
     state := State.init(stable_state);
   };
 
+  // Item management functions
+  public shared(msg) func createItem(typeId: ItemTypeId, count: ?Nat) : async Result.Result<ItemId, Text> {
+    ItemManager.createItem(state, msg.caller, typeId, count)
+  };
+
+  public shared(msg) func transferItem(itemId: ItemId, newOwner: Account, transferCount: ?Nat) : async Result.Result<(), Text> {
+    ItemManager.transferItem(state, msg.caller, itemId, newOwner, transferCount)
+  };
+
+  public shared(msg) func deleteItem(itemId: ItemId) : async Result.Result<(), Text> {
+    ItemManager.deleteItem(state, msg.caller, itemId)
+  };
+
+  // Container management functions
+  public shared(msg) func toggleContainer(containerId: ItemId) : async Result.Result<Bool, Text> {
+    ItemManager.toggleContainer(state, msg.caller, containerId)
+  };
+
+  public shared(msg) func getContainerContents(containerId: ItemId) : async Result.Result<[ItemId], Text> {
+    ItemManager.getContainerContents(state, msg.caller, containerId)
+  };
+
+  public query func hasContainerSpace(containerId: ItemId) : async Result.Result<Bool, Text> {
+    ItemManager.hasContainerSpace(state, containerId)
+  };
+
+  // Existing functions...
   public query(msg) func getMessages(afterId: ?MessageId) : async [LogMessage] {
     Lib.getMessages(state, msg.caller, afterId)
   };
@@ -134,14 +165,6 @@ actor class MudBackend() = this {
 
   public shared(msg) func clearPlayer(principal: Principal) : async () {
     Lib.clearPlayer(state, principal)
-  };
-
-  public shared(msg) func say(message: Text) : async Result.Result<(), Text> {
-    Lib.say(state, msg.caller, message)
-  };
-
-  public shared(msg) func whisper(targetName: Text, message: Text) : async Result.Result<(), Text> {
-    Lib.whisper(state, msg.caller, targetName, message)
   };
 
   // Realm management
