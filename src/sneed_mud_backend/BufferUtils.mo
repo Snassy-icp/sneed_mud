@@ -56,4 +56,18 @@ module {
     let start = cb.size - count;
     getFromCircularBuffer(cb, start, count)
   };
+
+  public func createCircularBufferFromStable(stableBuffer: Types.StableCircularBuffer) : Types.CircularBuffer {
+    let runtimeBuffer = Buffer.Buffer<Types.LogMessage>(stableBuffer.capacity);
+    for (msg in stableBuffer.messages.vals()) {
+      runtimeBuffer.add(msg);
+    };
+    {
+      var buffer = runtimeBuffer;
+      var start = stableBuffer.start;
+      var size = stableBuffer.size;
+      var capacity = stableBuffer.capacity;
+      var highestId = stableBuffer.highestId;
+    }
+  };
 } 
