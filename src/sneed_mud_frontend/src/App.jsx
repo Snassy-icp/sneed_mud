@@ -402,14 +402,15 @@ function App() {
 
   // Helper function to format stats
   function formatStats(stats) {
-    const nextLevelXp = stats.base.level === 1 ? 2000 : 
-      Math.floor(55.6 * (stats.base.level ** 2) - (471.2 * stats.base.level) + 5256.5);
-    const xpNeeded = nextLevelXp - stats.dynamic.xp;
+    const level = Number(stats.base.level);
+    const nextLevelXp = level === 1 ? 2000 : 
+      Math.floor(55.6 * (level ** 2) - (471.2 * level) + 5256.5);
+    const xpNeeded = nextLevelXp - Number(stats.dynamic.xp);
     
-    return `Level: ${stats.base.level}\n` +
-           `HP: ${stats.dynamic.hp}/${stats.base.maxHp}\n` +
-           `MP: ${stats.dynamic.mp}/${stats.base.maxMp}\n` +
-           `XP: ${stats.dynamic.xp}/${nextLevelXp} (${xpNeeded} more needed for next level)`;
+    return `Level: ${level}\n` +
+           `HP: ${Number(stats.dynamic.hp)}/${Number(stats.base.maxHp)}\n` +
+           `MP: ${Number(stats.dynamic.mp)}/${Number(stats.base.maxMp)}\n` +
+           `XP: ${Number(stats.dynamic.xp)}/${nextLevelXp} (${xpNeeded} more needed for next level)`;
   }
 
   async function handleCommand(command) {
@@ -1201,7 +1202,7 @@ Help:
       if (command === '/stats') {
         const result = await authenticatedActor.getStats();
         if ('ok' in result) {
-          addMessage(formatStats(result.ok));
+          setMessages(prev => [...prev, formatStats(result.ok)]);
           return;
         } else {
           throw new Error(result.err);
