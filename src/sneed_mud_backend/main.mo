@@ -4,7 +4,7 @@ import Types "./Types";
 import State "./State";
 import Lib "./lib";
 
-actor {
+actor class MudBackend() = this {
   type Room = Types.Room;
   type RoomId = Types.RoomId;
   type LogMessage = Types.LogMessage;
@@ -160,5 +160,10 @@ actor {
   // Room ownership queries
   public query func getOwnedRooms(principal: Principal) : async [(RoomId, Room)] {
     Lib.getOwnedRooms(state, principal)
+  };
+
+  // Get the principal of this canister
+  public func getCanisterPrincipal() : async Principal {
+    Principal.fromActor(this)
   };
 }
