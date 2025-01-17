@@ -15,7 +15,7 @@ module {
   type Exit = Types.Exit;
   type LogMessage = Types.LogMessage;
   type MessageId = Types.MessageId;
-  type CircularBuffer<T> = Types.CircularBuffer<T>;
+  type CircularBuffer = Types.CircularBuffer;
   type MudState = State.MudState;
 
   let starting_room : RoomId = 0;
@@ -24,7 +24,7 @@ module {
   private func ensureMessageLog(state: MudState, p: Principal) {
     switch (state.messageLogs.get(p)) {
       case null {
-        state.messageLogs.put(p, BufferUtils.createCircularBuffer<LogMessage>());
+        state.messageLogs.put(p, BufferUtils.createCircularBuffer());
       };
       case (?_) {};
     };
@@ -112,7 +112,12 @@ module {
   };
 
   // Room management functions
-  public func createRoom(state: MudState, name: Text, description: Text) : Result.Result<RoomId, Text> {
+  public func createRoom(state: MudState, caller: Principal, name: Text, description: Text) : Result.Result<RoomId, Text> {
+    // Only realm owners can create rooms
+    if (not State.isRealmOwner(state, caller)) {
+      return #err("Only realm owners can create rooms");
+    };
+
     let roomId = state.stable_state.nextRoomId;
     state.stable_state.nextRoomId += 1;
 
@@ -121,21 +126,103 @@ module {
       name = name;
       description = description;
       exits = [];
+      owners = [caller];  // Creator becomes the first owner
     };
 
     state.rooms.put(roomId, newRoom);
     #ok(roomId)
   };
 
-  public func updateRoom(state: MudState, roomId: RoomId, name: Text, description: Text) : Result.Result<(), Text> {
+  public func updateRoom(state: MudState, caller: Principal, roomId: RoomId, name: Text, description: Text) : Result.Result<(), Text> {
     switch (state.rooms.get(roomId)) {
       case null { #err("Room not found") };
       case (?room) {
+        if (not State.hasRoomAccess(state, room, caller)) {
+          return #err("You don't have permission to modify this room");
+        };
+
         let updatedRoom : Room = {
           id = room.id;
           name = name;
           description = description;
           exits = room.exits;
+          owners = room.owners;
+        };
+        state.rooms.put(roomId, updatedRoom);
+        #ok(())
+      };
+    };
+  };
+
+  public func addRoomOwner(state: MudState, caller: Principal, roomId: RoomId, newOwner: Principal) : Result.Result<(), Text> {
+    switch (state.rooms.get(roomId)) {
+      case null { #err("Room not found") };
+      case (?room) {
+        if (not State.hasRoomAccess(state, room, caller)) {
+          return #err("You don't have permission to modify this room's ownership");
+        };
+
+        // Check if already an owner
+        for (owner in room.owners.vals()) {
+          if (Principal.equal(owner, newOwner)) {
+            return #err("Principal is already an owner of this room");
+          };
+        };
+
+        // Add new owner
+        let existingOwners = Buffer.Buffer<Principal>(room.owners.size() + 1);
+        for (owner in room.owners.vals()) {
+          existingOwners.add(owner);
+        };
+        existingOwners.add(newOwner);
+
+        let updatedRoom : Room = {
+          id = room.id;
+          name = room.name;
+          description = room.description;
+          exits = room.exits;
+          owners = Buffer.toArray(existingOwners);
+        };
+        state.rooms.put(roomId, updatedRoom);
+        #ok(())
+      };
+    };
+  };
+
+  public func removeRoomOwner(state: MudState, caller: Principal, roomId: RoomId, ownerToRemove: Principal) : Result.Result<(), Text> {
+    switch (state.rooms.get(roomId)) {
+      case null { #err("Room not found") };
+      case (?room) {
+        if (not State.hasRoomAccess(state, room, caller)) {
+          return #err("You don't have permission to modify this room's ownership");
+        };
+
+        // Prevent removing the last owner
+        if (room.owners.size() <= 1) {
+          return #err("Cannot remove the last owner of a room");
+        };
+
+        // Remove owner
+        let remainingOwners = Buffer.Buffer<Principal>(room.owners.size());
+        var found = false;
+        for (owner in room.owners.vals()) {
+          if (not Principal.equal(owner, ownerToRemove)) {
+            remainingOwners.add(owner);
+          } else {
+            found := true;
+          };
+        };
+
+        if (not found) {
+          return #err("Principal is not an owner of this room");
+        };
+
+        let updatedRoom : Room = {
+          id = room.id;
+          name = room.name;
+          description = room.description;
+          exits = room.exits;
+          owners = Buffer.toArray(remainingOwners);
         };
         state.rooms.put(roomId, updatedRoom);
         #ok(())
@@ -145,6 +232,7 @@ module {
 
   public func updateExit(
     state: MudState,
+    caller: Principal,
     fromRoomId: RoomId,
     exitId: Text,
     name: Text,
@@ -155,6 +243,10 @@ module {
     switch (state.rooms.get(fromRoomId)) {
       case null { #err("Source room not found") };
       case (?room) {
+        if (not State.hasRoomAccess(state, room, caller)) {
+          return #err("You don't have permission to modify exits in this room");
+        };
+
         switch (state.rooms.get(targetRoomId)) {
           case null { #err("Target room not found") };
           case (?_) {
@@ -187,6 +279,7 @@ module {
               name = room.name;
               description = room.description;
               exits = Buffer.toArray(existingExits);
+              owners = room.owners;
             };
 
             state.rooms.put(fromRoomId, updatedRoom);
@@ -199,6 +292,7 @@ module {
 
   public func addExit(
     state: MudState,
+    caller: Principal,
     fromRoomId: RoomId, 
     exitId: Text,
     name: Text, 
@@ -209,6 +303,10 @@ module {
     switch (state.rooms.get(fromRoomId)) {
       case null { #err("Source room not found") };
       case (?room) {
+        if (not State.hasRoomAccess(state, room, caller)) {
+          return #err("You don't have permission to add exits to this room");
+        };
+
         switch (state.rooms.get(targetRoomId)) {
           case null { #err("Target room not found") };
           case (?_) {
@@ -230,6 +328,7 @@ module {
               name = room.name;
               description = room.description;
               exits = Buffer.toArray(existingExits);
+              owners = room.owners;
             };
 
             state.rooms.put(fromRoomId, updatedRoom);
@@ -475,5 +574,104 @@ module {
         };
       };
     };
+  };
+
+  // Realm management functions
+  public func addRealmOwner(state: MudState, caller: Principal, newOwner: Principal) : Result.Result<(), Text> {
+    // Special case: if there are no realm owners, allow setting the first one
+    if (state.realmConfig.owners.size() == 0) {
+      let newConfig = {
+        name = state.realmConfig.name;
+        description = state.realmConfig.description;
+        owners = [newOwner];
+      };
+      state.realmConfig := newConfig;
+      return #ok(());
+    };
+
+    // Normal case: only existing realm owners can add new ones
+    if (not State.isRealmOwner(state, caller)) {
+      return #err("Only realm owners can add new realm owners");
+    };
+
+    // Check if already an owner
+    for (owner in state.realmConfig.owners.vals()) {
+      if (Principal.equal(owner, newOwner)) {
+        return #err("Principal is already a realm owner");
+      };
+    };
+
+    // Add new owner
+    let existingOwners = Buffer.Buffer<Principal>(state.realmConfig.owners.size() + 1);
+    for (owner in state.realmConfig.owners.vals()) {
+      existingOwners.add(owner);
+    };
+    existingOwners.add(newOwner);
+    
+    let newConfig = {
+      name = state.realmConfig.name;
+      description = state.realmConfig.description;
+      owners = Buffer.toArray(existingOwners);
+    };
+    state.realmConfig := newConfig;
+    #ok(())
+  };
+
+  public func removeRealmOwner(state: MudState, caller: Principal, ownerToRemove: Principal) : Result.Result<(), Text> {
+    if (not State.isRealmOwner(state, caller)) {
+      return #err("Only realm owners can remove realm owners");
+    };
+
+    // Prevent removing the last owner
+    if (state.realmConfig.owners.size() <= 1) {
+      return #err("Cannot remove the last realm owner");
+    };
+
+    // Remove owner
+    let remainingOwners = Buffer.Buffer<Principal>(state.realmConfig.owners.size());
+    var found = false;
+    for (owner in state.realmConfig.owners.vals()) {
+      if (not Principal.equal(owner, ownerToRemove)) {
+        remainingOwners.add(owner);
+      } else {
+        found := true;
+      };
+    };
+
+    if (not found) {
+      return #err("Principal is not a realm owner");
+    };
+
+    let newConfig = {
+      name = state.realmConfig.name;
+      description = state.realmConfig.description;
+      owners = Buffer.toArray(remainingOwners);
+    };
+    state.realmConfig := newConfig;
+    #ok(())
+  };
+
+  public func updateRealmInfo(state: MudState, caller: Principal, name: Text, description: Text) : Result.Result<(), Text> {
+    if (not State.isRealmOwner(state, caller)) {
+      return #err("Only realm owners can update realm information");
+    };
+
+    let newConfig = {
+      name = name;
+      description = description;
+      owners = state.realmConfig.owners;
+    };
+    state.realmConfig := newConfig;
+    #ok(())
+  };
+
+  public func getOwnedRooms(state: MudState, principal: Principal) : [(RoomId, Room)] {
+    let ownedRooms = Buffer.Buffer<(RoomId, Room)>(0);
+    for ((roomId, room) in state.rooms.entries()) {
+      if (State.isRoomOwner(room, principal)) {
+        ownedRooms.add((roomId, room));
+      };
+    };
+    Buffer.toArray(ownedRooms)
   };
 } 

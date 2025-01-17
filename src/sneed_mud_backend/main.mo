@@ -30,11 +30,11 @@ actor {
   };
 
   public shared(msg) func createRoom(name: Text, description: Text) : async Result.Result<RoomId, Text> {
-    Lib.createRoom(state, name, description)
+    Lib.createRoom(state, msg.caller, name, description)
   };
 
   public shared(msg) func updateRoom(roomId: RoomId, name: Text, description: Text) : async Result.Result<(), Text> {
-    Lib.updateRoom(state, roomId, name, description)
+    Lib.updateRoom(state, msg.caller, roomId, name, description)
   };
 
   public shared(msg) func updateExit(
@@ -45,7 +45,7 @@ actor {
     targetRoomId: RoomId,
     direction: ?Text
   ) : async Result.Result<(), Text> {
-    Lib.updateExit(state, fromRoomId, exitId, name, description, targetRoomId, direction)
+    Lib.updateExit(state, msg.caller, fromRoomId, exitId, name, description, targetRoomId, direction)
   };
 
   public shared(msg) func addExit(
@@ -56,7 +56,39 @@ actor {
     targetRoomId: RoomId,
     direction: ?Text
   ) : async Result.Result<(), Text> {
-    Lib.addExit(state, fromRoomId, exitId, name, description, targetRoomId, direction)
+    Lib.addExit(state, msg.caller, fromRoomId, exitId, name, description, targetRoomId, direction)
+  };
+
+  // Room ownership management
+  public shared(msg) func addRoomOwner(roomId: RoomId, newOwner: Principal) : async Result.Result<(), Text> {
+    Lib.addRoomOwner(state, msg.caller, roomId, newOwner)
+  };
+
+  public shared(msg) func removeRoomOwner(roomId: RoomId, ownerToRemove: Principal) : async Result.Result<(), Text> {
+    Lib.removeRoomOwner(state, msg.caller, roomId, ownerToRemove)
+  };
+
+  // Realm management
+  public query func getRealmInfo() : async Types.RealmConfig {
+    state.realmConfig
+  };
+
+  public query func isRealmOwner(principal: Principal) : async Bool {
+    State.isRealmOwner(state, principal)
+  };
+
+  public query func isRoomOwner(roomId: RoomId, principal: Principal) : async Bool {
+    switch (state.rooms.get(roomId)) {
+      case null { false };
+      case (?room) { State.isRoomOwner(room, principal) };
+    }
+  };
+
+  public query func getRoomOwners(roomId: RoomId) : async Result.Result<[Principal], Text> {
+    switch (state.rooms.get(roomId)) {
+      case null { #err("Room not found") };
+      case (?room) { #ok(room.owners) };
+    }
   };
 
   public query func getRoom(roomId: RoomId) : async ?Room {
@@ -110,5 +142,23 @@ actor {
 
   public shared(msg) func whisper(targetName: Text, message: Text) : async Result.Result<(), Text> {
     Lib.whisper(state, msg.caller, targetName, message)
+  };
+
+  // Realm management
+  public shared(msg) func addRealmOwner(newOwner: Principal) : async Result.Result<(), Text> {
+    Lib.addRealmOwner(state, msg.caller, newOwner)
+  };
+
+  public shared(msg) func removeRealmOwner(ownerToRemove: Principal) : async Result.Result<(), Text> {
+    Lib.removeRealmOwner(state, msg.caller, ownerToRemove)
+  };
+
+  public shared(msg) func updateRealmInfo(name: Text, description: Text) : async Result.Result<(), Text> {
+    Lib.updateRealmInfo(state, msg.caller, name, description)
+  };
+
+  // Room ownership queries
+  public query func getOwnedRooms(principal: Principal) : async [(RoomId, Room)] {
+    Lib.getOwnedRooms(state, principal)
   };
 }

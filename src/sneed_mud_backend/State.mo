@@ -1,126 +1,167 @@
 import Principal "mo:base/Principal";
 import HashMap "mo:base/HashMap";
-import Text "mo:base/Text";
-import Nat "mo:base/Nat";
-import Hash "mo:base/Hash";
-import Array "mo:base/Array";
-import Iter "mo:base/Iter";
-import Buffer "mo:base/Buffer";
 import Types "./Types";
-import BufferUtils "./BufferUtils";
+import Buffer "mo:base/Buffer";
+import Text "mo:base/Text";
+import Hash "mo:base/Hash";
+import Nat "mo:base/Nat";
+import Iter "mo:base/Iter";
 
 module {
-  type Room = Types.Room;
-  type RoomId = Types.RoomId;
-  type Exit = Types.Exit;
-  type LogMessage = Types.LogMessage;
-  type MessageId = Types.MessageId;
-  type CircularBuffer<T> = Types.CircularBuffer<T>;
-
   public type StableState = {
-    var playerEntries : [(Principal, Text)];
-    var roomEntries : [(RoomId, Room)];
-    var playerLocationEntries : [(Principal, RoomId)];
-    var messageLogEntries : [(Principal, [LogMessage])];
-    var nextRoomId : Nat;
-    var nextMessageId : MessageId;
+    var nextRoomId: Types.RoomId;
+    var nextMessageId: Types.MessageId;
+    var stableRooms: [(Types.RoomId, Types.Room)];
+    var stablePlayers: [(Principal, Text)];
+    var stableUsedNames: [(Text, Principal)];
+    var stablePlayerLocations: [(Principal, Types.RoomId)];
+    var stableRealmConfig: Types.RealmConfig;
+    var stableMessageLogs: [(Principal, Types.StableCircularBuffer)];
   };
 
   public type MudState = {
-    stable_state : StableState;
-    var players : HashMap.HashMap<Principal, Text>;
-    var usedNames : HashMap.HashMap<Text, Principal>;
-    var rooms : HashMap.HashMap<RoomId, Room>;
-    var playerLocations : HashMap.HashMap<Principal, RoomId>;
-    var messageLogs : HashMap.HashMap<Principal, CircularBuffer<LogMessage>>;
+    rooms: HashMap.HashMap<Types.RoomId, Types.Room>;
+    players: HashMap.HashMap<Principal, Text>;
+    usedNames: HashMap.HashMap<Text, Principal>;
+    playerLocations: HashMap.HashMap<Principal, Types.RoomId>;
+    messageLogs: HashMap.HashMap<Principal, Types.CircularBuffer>;
+    stable_state: StableState;
+    var realmConfig: Types.RealmConfig;
   };
 
   public func initStable() : StableState {
     {
-      var playerEntries = [];
-      var roomEntries = [];
-      var playerLocationEntries = [];
-      var messageLogEntries = [];
       var nextRoomId = 0;
       var nextMessageId = 0;
+      var stableRooms = [];
+      var stablePlayers = [];
+      var stableUsedNames = [];
+      var stablePlayerLocations = [];
+      var stableRealmConfig = {
+        name = "Default Realm";
+        description = "A new realm awaiting configuration";
+        owners = [Principal.fromText("2vxsx-fae")];
+      };
+      var stableMessageLogs = [];
     }
   };
 
-  public func init(stable_state : StableState) : MudState {
-    let state = {
-      stable_state = stable_state;
-      var players = HashMap.fromIter<Principal, Text>(
-        stable_state.playerEntries.vals(), 
-        100, 
-        Principal.equal, 
-        Principal.hash
-      );
-      var usedNames = HashMap.fromIter<Text, Principal>(
-        Array.map<(Principal, Text), (Text, Principal)>(
-          stable_state.playerEntries,
-          func ((p, n) : (Principal, Text)) : (Text, Principal) = (n, p)
-        ).vals(),
-        100,
-        Text.equal,
-        Text.hash
-      );
-      var rooms = HashMap.fromIter<RoomId, Room>(
-        stable_state.roomEntries.vals(), 
-        100, 
-        Nat.equal, 
-        Hash.hash
-      );
-      var playerLocations = HashMap.fromIter<Principal, RoomId>(
-        stable_state.playerLocationEntries.vals(), 
-        100, 
-        Principal.equal, 
-        Principal.hash
-      );
-      var messageLogs = HashMap.HashMap<Principal, CircularBuffer<LogMessage>>(
-        100, 
-        Principal.equal, 
-        Principal.hash
-      );
-    };
-
-    // Initialize message logs from stable storage
-    for ((principal, messages) in stable_state.messageLogEntries.vals()) {
-      let cb = BufferUtils.createCircularBuffer<LogMessage>();
-      for (msg in messages.vals()) {
-        BufferUtils.addToCircularBuffer(cb, msg);
+  public func init(stable_state: StableState) : MudState {
+    // Initialize hashmaps with stable data
+    let rooms = HashMap.fromIter<Types.RoomId, Types.Room>(
+      stable_state.stableRooms.vals(),
+      10,
+      Nat.equal,
+      Hash.hash
+    );
+    let players = HashMap.fromIter<Principal, Text>(
+      stable_state.stablePlayers.vals(),
+      10,
+      Principal.equal,
+      Principal.hash
+    );
+    let usedNames = HashMap.fromIter<Text, Principal>(
+      stable_state.stableUsedNames.vals(),
+      10,
+      Text.equal,
+      Text.hash
+    );
+    let playerLocations = HashMap.fromIter<Principal, Types.RoomId>(
+      stable_state.stablePlayerLocations.vals(),
+      10,
+      Principal.equal,
+      Principal.hash
+    );
+    
+    // Convert stable message logs to runtime circular buffers
+    let messageLogs = HashMap.HashMap<Principal, Types.CircularBuffer>(10, Principal.equal, Principal.hash);
+    for ((principal, stableLog) in stable_state.stableMessageLogs.vals()) {
+      let runtimeBuffer = Buffer.Buffer<Types.LogMessage>(stableLog.capacity);
+      for (msg in stableLog.messages.vals()) {
+        runtimeBuffer.add(msg);
       };
-      state.messageLogs.put(principal, cb);
+      let circularBuffer : Types.CircularBuffer = {
+        var buffer = runtimeBuffer;
+        var start = stableLog.start;
+        var size = stableLog.size;
+        var capacity = stableLog.capacity;
+        var highestId = stableLog.highestId;
+      };
+      messageLogs.put(principal, circularBuffer);
     };
 
-    state
+    {
+      rooms = rooms;
+      players = players;
+      usedNames = usedNames;
+      playerLocations = playerLocations;
+      messageLogs = messageLogs;
+      stable_state = stable_state;
+      var realmConfig = stable_state.stableRealmConfig;
+    }
   };
 
-  public func preupgrade(state : MudState) : StableState {
-    let playerBuffer = Buffer.Buffer<(Principal, Text)>(state.players.size());
-    for ((p, t) in state.players.entries()) {
-      playerBuffer.add((p, t));
+  public func preupgrade(state: MudState) : StableState {
+    // Convert runtime circular buffers to stable format
+    let stableMessageLogs = Buffer.Buffer<(Principal, Types.StableCircularBuffer)>(0);
+    for ((principal, circularBuffer) in state.messageLogs.entries()) {
+      let messages = Buffer.toArray(circularBuffer.buffer);
+      let stableBuffer : Types.StableCircularBuffer = {
+        messages = messages;
+        start = circularBuffer.start;
+        size = circularBuffer.size;
+        capacity = circularBuffer.capacity;
+        highestId = circularBuffer.highestId;
+      };
+      stableMessageLogs.add((principal, stableBuffer));
     };
 
-    let roomBuffer = Buffer.Buffer<(RoomId, Room)>(state.rooms.size());
-    for ((id, room) in state.rooms.entries()) {
-      roomBuffer.add((id, room));
-    };
+    {
+      var nextRoomId = state.stable_state.nextRoomId;
+      var nextMessageId = state.stable_state.nextMessageId;
+      var stableRooms = Iter.toArray(state.rooms.entries());
+      var stablePlayers = Iter.toArray(state.players.entries());
+      var stableUsedNames = Iter.toArray(state.usedNames.entries());
+      var stablePlayerLocations = Iter.toArray(state.playerLocations.entries());
+      var stableRealmConfig = state.realmConfig;
+      var stableMessageLogs = Buffer.toArray(stableMessageLogs);
+    }
+  };
 
-    let locationBuffer = Buffer.Buffer<(Principal, RoomId)>(state.playerLocations.size());
-    for ((p, r) in state.playerLocations.entries()) {
-      locationBuffer.add((p, r));
+  // Helper functions for ownership checks
+  public func isRealmOwner(state: MudState, principal: Principal) : Bool {
+    for (owner in state.realmConfig.owners.vals()) {
+      if (Principal.equal(owner, principal)) {
+        return true;
+      };
     };
+    false
+  };
 
-    let messageBuffer = Buffer.Buffer<(Principal, [LogMessage])>(state.messageLogs.size());
-    for ((p, cb) in state.messageLogs.entries()) {
-      messageBuffer.add((p, BufferUtils.getFromCircularBuffer(cb, 0, cb.size)));
+  public func isRoomOwner(room: Types.Room, principal: Principal) : Bool {
+    for (owner in room.owners.vals()) {
+      if (Principal.equal(owner, principal)) {
+        return true;
+      };
     };
+    false
+  };
 
-    state.stable_state.playerEntries := Buffer.toArray(playerBuffer);
-    state.stable_state.roomEntries := Buffer.toArray(roomBuffer);
-    state.stable_state.playerLocationEntries := Buffer.toArray(locationBuffer);
-    state.stable_state.messageLogEntries := Buffer.toArray(messageBuffer);
-    
-    state.stable_state
+  public func hasRoomAccess(state: MudState, room: Types.Room, principal: Principal) : Bool {
+    isRealmOwner(state, principal) or isRoomOwner(room, principal)
+  };
+
+  // Helper function to convert array to buffer
+  public func arrayToBuffer<T>(array: [T]) : Buffer.Buffer<T> {
+    let buffer = Buffer.Buffer<T>(array.size());
+    for (item in array.vals()) {
+      buffer.add(item);
+    };
+    buffer
+  };
+
+  // Helper function to convert buffer to array
+  public func bufferToArray<T>(buffer: Buffer.Buffer<T>) : [T] {
+    Buffer.toArray(buffer)
   };
 } 
