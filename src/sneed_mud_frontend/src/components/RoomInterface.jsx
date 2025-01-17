@@ -1,13 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const RoomInterface = ({ onCommand, currentRoom }) => {
   const [command, setCommand] = useState('');
+  const [commandHistory, setCommandHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (command.trim()) {
       onCommand(command.trim());
+      // Add command to history
+      setCommandHistory(prev => [...prev, command.trim()]);
+      setHistoryIndex(-1);
       setCommand('');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (commandHistory.length === 0) return;
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const newIndex = historyIndex === -1 
+        ? commandHistory.length - 1 
+        : Math.max(0, historyIndex - 1);
+      setHistoryIndex(newIndex);
+      setCommand(commandHistory[newIndex]);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex === -1) return;
+      
+      const newIndex = historyIndex + 1;
+      if (newIndex >= commandHistory.length) {
+        setHistoryIndex(-1);
+        setCommand('');
+      } else {
+        setHistoryIndex(newIndex);
+        setCommand(commandHistory[newIndex]);
+      }
     }
   };
 
@@ -37,6 +67,7 @@ const RoomInterface = ({ onCommand, currentRoom }) => {
           type="text"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder='Enter command... (Type /help or /? for available commands)'
           className="command-input"
         />
