@@ -290,4 +290,12 @@ actor class MudBackend() = this {
       };
     }
   };
+
+  public shared(msg) func say(message: Text) : async Result.Result<(), Text> {
+    Lib.say(state, msg.caller, message)
+  };
+
+  public shared(msg) func whisper(targetName: Text, message: Text) : async Result.Result<(), Text> {
+    Lib.whisper(state, msg.caller, targetName, message)
+  };
 }
