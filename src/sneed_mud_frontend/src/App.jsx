@@ -137,6 +137,64 @@ function App() {
     }
   }
 
+  // Helper function to recursively get container contents
+  async function getContainerContentsRecursive(containerId, depth = 0) {
+    if (depth > 5) return []; // Prevent infinite recursion, limit depth to 5 levels
+    
+    const contentsResult = await authenticatedActor.getContainerContents(containerId);
+    if (!('ok' in contentsResult)) return [];
+    
+    const contents = contentsResult.ok;
+    const messages = [];
+    
+    if (contents.length > 0) {
+      // Group contents by type
+      const groupedContents = new Map();
+      for (const itemId of contents) {
+        const itemResult = await authenticatedActor.getItems();
+        if ('ok' in itemResult) {
+          const containerItem = itemResult.ok.find(i => i.id === itemId);
+          if (containerItem) {
+            const key = containerItem.item_type.name;
+            const count = groupedContents.get(key)?.count || 0;
+            groupedContents.set(key, {
+              id: containerItem.id,
+              count: count + containerItem.count,
+              isContainer: containerItem.item_type.is_container,
+              isOpen: containerItem.is_open,
+              type: containerItem.item_type
+            });
+          }
+        }
+      }
+      
+      // Display grouped contents
+      for (const [name, info] of groupedContents) {
+        const countStr = info.count > 1 ? ` (x${info.count})` : '';
+        const containerStatus = info.isContainer ? 
+          ` [${info.isOpen ? 'open' : 'closed'}]` : 
+          '';
+        const indent = '  '.repeat(depth + 1);
+        messages.push(`${indent}${name}${countStr}${containerStatus}`);
+        
+        // Recursively get contents of nested containers
+        if (info.isContainer && info.isOpen) {
+          const nestedContents = await getContainerContentsRecursive(info.id, depth + 1);
+          if (nestedContents.length > 0) {
+            messages.push(...nestedContents);
+          } else if (depth < 5) { // Only show "empty" message if we haven't hit depth limit
+            messages.push(`${indent}  (empty)`);
+          }
+        }
+      }
+    } else {
+      const indent = '  '.repeat(depth + 1);
+      messages.push(`${indent}(empty)`);
+    }
+    
+    return messages;
+  }
+
   useEffect(() => {
     initAuth();
   }, []);
@@ -628,81 +686,164 @@ function App() {
     }
 
     // Handle look command (/look)
-    if (command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
+    if (command.toLowerCase().startsWith('/look ') || command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
       try {
-        // Display room information
-        if (!currentRoom) {
-          setMessages(prev => [...prev, "You can't see anything."]);
+        // If no argument, show room
+        if (command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
+          // Display room information
+          if (!currentRoom) {
+            setMessages(prev => [...prev, "You can't see anything."]);
+            return;
+          }
+
+          // Start with room description
+          const roomMessages = [
+            `${currentRoom.name}`,
+            currentRoom.description,
+            ""  // Empty line for spacing
+          ];
+
+          // Add players in room
+          if (playersInRoom.length > 0) {
+            const otherPlayers = playersInRoom.filter(([principal, name]) => name !== playerName);
+            if (otherPlayers.length > 0) {
+              roomMessages.push("You see:");
+              otherPlayers.forEach(([_, name]) => {
+                roomMessages.push(`  ${name} is here.`);
+              });
+              roomMessages.push("");  // Empty line for spacing
+            }
+          }
+
+          // Add items in room
+          const itemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
+          if ('ok' in itemsResult) {
+            const items = itemsResult.ok;
+            if (items.length > 0) {
+              // Group items by type and count
+              const groupedItems = items.reduce((acc, item) => {
+                const key = `${item.item_type.id}-${item.item_type.name}`;
+                if (!acc[key]) {
+                  acc[key] = {
+                    type: item.item_type,
+                    count: item.count,
+                    isOpen: item.is_open
+                  };
+                } else {
+                  acc[key].count += item.count;
+                }
+                return acc;
+              }, {});
+
+              roomMessages.push("You also see:");
+              Object.values(groupedItems).forEach(group => {
+                const countStr = group.count > 1 ? ` (x${group.count})` : '';
+                const containerStatus = group.type.is_container ? 
+                  ` [${group.isOpen ? 'open' : 'closed'}]` : 
+                  '';
+                roomMessages.push(`  ${group.type.name}${countStr}${containerStatus}`);
+              });
+              roomMessages.push("");  // Empty line for spacing
+            }
+          }
+
+          // Add exits
+          if (currentRoom.exits && currentRoom.exits.length > 0) {
+            roomMessages.push("Obvious exits:");
+            currentRoom.exits.forEach(([exitId, exit]) => {
+              const directionStr = exit.direction ? ` (${exit.direction})` : '';
+              roomMessages.push(`  ${exit.name}${directionStr}`);
+            });
+          } else {
+            roomMessages.push("There are no obvious exits.");
+          }
+
+          // Update the message log with all room information
+          setMessages(prev => [...prev, ...roomMessages]);
           return;
         }
 
-        // Start with room description
-        const roomMessages = [
-          `${currentRoom.name}`,
-          currentRoom.description,
-          ""  // Empty line for spacing
-        ];
+        // Look at specific item
+        const itemName = command.substring(command.indexOf(' ') + 1).trim();
+        
+        // First check inventory
+        const inventoryResult = await authenticatedActor.getItems();
+        if ('ok' in inventoryResult) {
+          const items = inventoryResult.ok;
+          const normalizedSearch = itemName.toLowerCase().trim();
+          
+          // Find matching items in inventory
+          const inventoryMatches = items.filter(item => 
+            item.item_type.name.toLowerCase().includes(normalizedSearch)
+          );
 
-        // Add players in room
-        if (playersInRoom.length > 0) {
-          const otherPlayers = playersInRoom.filter(([principal, name]) => name !== playerName);
-          if (otherPlayers.length > 0) {
-            roomMessages.push("You see:");
-            otherPlayers.forEach(([_, name]) => {
-              roomMessages.push(`  ${name} is here.`);
-            });
-            roomMessages.push("");  // Empty line for spacing
-          }
-        }
+          if (inventoryMatches.length === 1) {
+            const item = inventoryMatches[0];
+            const messages = [
+              `${item.item_type.name}${item.count > 1 ? ` (x${item.count})` : ''}`,
+              item.item_type.description
+            ];
 
-        // Add items in room
-        const itemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
-        if ('ok' in itemsResult) {
-          const items = itemsResult.ok;
-          if (items.length > 0) {
-            // Group items by type and count
-            const groupedItems = items.reduce((acc, item) => {
-              const key = `${item.item_type.id}-${item.item_type.name}`;
-              if (!acc[key]) {
-                acc[key] = {
-                  type: item.item_type,
-                  count: item.count,
-                  isOpen: item.is_open
-                };
-              } else {
-                acc[key].count += item.count;
+            if (item.item_type.is_container) {
+              messages.push(`The container is ${item.is_open ? 'open' : 'closed'}.`);
+              
+              if (item.is_open) {
+                messages.push("It contains:");
+                const contents = await getContainerContentsRecursive(item.id);
+                messages.push(...contents);
               }
-              return acc;
-            }, {});
-
-            roomMessages.push("You also see:");
-            Object.values(groupedItems).forEach(group => {
-              const countStr = group.count > 1 ? ` (x${group.count})` : '';
-              const containerStatus = group.type.is_container ? 
-                ` [${group.isOpen ? 'open' : 'closed'}]` : 
-                '';
-              roomMessages.push(`  ${group.type.name}${countStr}${containerStatus}`);
-            });
-            roomMessages.push("");  // Empty line for spacing
+            }
+            
+            setMessages(prev => [...prev, ...messages]);
+            return;
+          } else if (inventoryMatches.length > 1) {
+            setMessages(prev => [...prev, `Multiple matches in your inventory: ${inventoryMatches.map(i => i.item_type.name).join(', ')}`]);
+            return;
           }
         }
 
-        // Add exits
-        if (currentRoom.exits && currentRoom.exits.length > 0) {
-          roomMessages.push("Obvious exits:");
-          currentRoom.exits.forEach(([exitId, exit]) => {
-            const directionStr = exit.direction ? ` (${exit.direction})` : '';
-            roomMessages.push(`  ${exit.name}${directionStr}`);
-          });
-        } else {
-          roomMessages.push("There are no obvious exits.");
+        // If not found in inventory, check room
+        if (currentRoom) {
+          const roomItemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
+          if ('ok' in roomItemsResult) {
+            const items = roomItemsResult.ok;
+            const normalizedSearch = itemName.toLowerCase().trim();
+            
+            // Find matching items in room
+            const roomMatches = items.filter(item => 
+              item.item_type.name.toLowerCase().includes(normalizedSearch)
+            );
+
+            if (roomMatches.length === 1) {
+              const item = roomMatches[0];
+              const messages = [
+                `${item.item_type.name}${item.count > 1 ? ` (x${item.count})` : ''}`,
+                item.item_type.description
+              ];
+
+              if (item.item_type.is_container) {
+                messages.push(`The container is ${item.is_open ? 'open' : 'closed'}.`);
+                
+                if (item.is_open) {
+                  messages.push("It contains:");
+                  const contents = await getContainerContentsRecursive(item.id);
+                  messages.push(...contents);
+                }
+              }
+              
+              setMessages(prev => [...prev, ...messages]);
+              return;
+            } else if (roomMatches.length > 1) {
+              setMessages(prev => [...prev, `Multiple matches in the room: ${roomMatches.map(i => i.item_type.name).join(', ')}`]);
+              return;
+            }
+          }
         }
 
-        // Update the message log with all room information
-        setMessages(prev => [...prev, ...roomMessages]);
+        setMessages(prev => [...prev, `You don't see '${itemName}' anywhere.`]);
       } catch (error) {
-        console.error("Error looking around:", error);
-        setMessages(prev => [...prev, `Error: Failed to look around - ${error.message || 'Unknown error'}`]);
+        console.error("Error looking at item:", error);
+        setMessages(prev => [...prev, `Error: Failed to look at item - ${error.message || 'Unknown error'}`]);
       }
       return;
     }
