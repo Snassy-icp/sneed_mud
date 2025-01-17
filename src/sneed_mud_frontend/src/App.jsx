@@ -41,6 +41,28 @@ function App() {
     return bytes;
   }
 
+  // Create a subaccount for room ownership
+  // First byte is length (32), second byte is type (1 for room ownership)
+  // Remaining bytes are the room ID in little-endian order
+  function createRoomSubaccount(roomId) {
+    // Initialize 32-byte array with zeros
+    const bytes = new Uint8Array(32);
+    
+    // Set length and type
+    bytes[0] = 32; // Length
+    bytes[1] = 1;  // Type 1 for room ownership
+    
+    // Convert roomId to bytes in little-endian order
+    let n = BigInt(roomId);
+    let pos = 2;
+    while (n > 0n) {
+      bytes[pos++] = Number(n & 0xFFn);
+      n >>= 8n;
+    }
+    
+    return bytes;
+  }
+
   // Direction aliases mapping
   const DIRECTION_ALIASES = {
     'n': 'north',
@@ -898,23 +920,65 @@ function App() {
     }
 
     // Handle help command (/help or /?)
-    if (command.toLowerCase() === '/help' || command.toLowerCase() === '/?') {
-      setMessages(prev => [...prev,
-        "Available commands:",
-        "  /help, /? - Show this help message",
-        "  /look, /l - Look around the room",
-        "  /say <message>, /s <message> - Say something to everyone in the room",
-        "  /whisper <player> <message>, /w <player> <message> - Send a private message to a player",
-        "  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)",
-        "  /inventory, /i - Check your inventory",
-        "  /create_room \"<name>\" \"<description>\" - Create a new room",
-        "  /create_exit \"<exit_id>\" \"<name>\" \"<description>\" <target_room_id> [\"<direction>\"] - Create an exit",
-        "  /create_item_type \"<name>\" \"<description>\" <is_container> <container_capacity> \"<icon_url>\" <stack_max> - Create an item type",
-        "  /create_item <type_id> [count] - Create an item of the specified type",
-        "  /put <item> in|into <container> - Put an item into a container",
-        "  /open <container> - Open a container",
-        "  /close <container> - Close a container"
-      ]);
+    if (command === '/help' || command === '/?') {
+      setMessages(prev => [...prev, `Available commands:
+      /help, /? - Show this help message
+      /look, /l - Look around the room
+      /look <item> - Look at an item in your inventory or the room
+      /go <exit>, /g <exit> - Move through an exit
+      /say <message>, /s <message> - Say something to everyone in the room
+      /whisper <player> <message>, /w <player> <message> - Send a private message to a player
+      /open <container> - Open a container
+      /put <item> in|into <container> - Put an item into a container
+      /drop <item> [count] - Drop an item in the current room
+      /inventory, /i - Show your inventory`]);
+      return;
+    }
+
+    // Handle drop command (/drop)
+    if (command.toLowerCase().startsWith('/drop ')) {
+      const argsString = command.substring(command.indexOf(' ') + 1).trim();
+      
+      try {
+        // Match format: item [count]
+        const matches = argsString.match(/^(.+?)(?:\s+(\d+))?$/);
+        if (!matches) {
+          setMessages(prev => [...prev, "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'"]);
+          return;
+        }
+        
+        const [_, itemStr, countStr] = matches;
+        const count = countStr ? parseInt(countStr) : 1;
+        
+        try {
+          // Find matching item
+          const item = await findMatchingItem(itemStr);
+          
+          // Create room account
+          const targetAccount = {
+            owner: await authenticatedActor.getCanisterPrincipal(),
+            subaccount: [createRoomSubaccount(currentRoom.id)]
+          };
+
+          // Transfer item to room
+          const result = await authenticatedActor.transferItem(
+            item.id,
+            targetAccount,
+            count === item.count ? [] : [count]
+          );
+          
+          if ('ok' in result) {
+            setMessages(prev => [...prev, `You drop ${item.name}`]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error dropping item:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+      } catch (error) {
+        setMessages(prev => [...prev, "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'"]); 
+      }
       return;
     }
 
