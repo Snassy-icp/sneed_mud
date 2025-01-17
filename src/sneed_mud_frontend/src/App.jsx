@@ -832,6 +832,22 @@ function App() {
         return;
       }
 
+      // Look at player
+      if (command.toLowerCase().startsWith('/look ')) {
+        const targetName = command.substring(6).trim();
+        // Check if looking at a player first
+        try {
+          const result = await authenticatedActor.lookAtPlayer(targetName);
+          if ('ok' in result) {
+            setMessages(prev => [...prev, result.ok]);
+            return;
+          }
+          // If not a player, continue with existing look logic...
+        } catch (error) {
+          // Silently continue to item/room look if not a player
+        }
+      }
+
       // Handle look command (/look)
       if (command.toLowerCase().startsWith('/look ') || command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
         try {
@@ -1207,18 +1223,6 @@ Help:
         } else {
           throw new Error(result.err);
         }
-      }
-
-      // Look at player
-      if (command.startsWith('/look ')) {
-        const targetName = command.substring(6).trim();
-        // Check if looking at a player
-        const result = await authenticatedActor.lookAtPlayer(targetName);
-        if ('ok' in result) {
-          addMessage(result.ok);
-          return;
-        }
-        // If not a player, continue with existing look logic...
       }
 
       // If no command matched, show error
