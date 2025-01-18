@@ -835,6 +835,7 @@ function App() {
       // Look at player
       if (command.toLowerCase().startsWith('/look ')) {
         const targetName = command.substring(6).trim();
+        
         // Check if looking at a player first
         try {
           const result = await authenticatedActor.lookAtPlayer(targetName);
@@ -842,9 +843,23 @@ function App() {
             setMessages(prev => [...prev, result.ok]);
             return;
           }
-          // If not a player, continue with existing look logic...
         } catch (error) {
-          // Silently continue to item/room look if not a player
+          // Silently continue to other look checks if not a player
+        }
+
+        // Check if looking at an exit
+        if (currentRoom?.exits) {
+          const matchingExitId = findMatchingExit(targetName, currentRoom.exits);
+          if (matchingExitId) {
+            const exit = currentRoom.exits.find(([exitId, _]) => exitId === matchingExitId)[1];
+            const directionStr = exit.direction ? ` (${exit.direction})` : '';
+            const message = [
+              `${matchingExitId}: ${exit.name}${directionStr}`,
+              exit.description
+            ];
+            setMessages(prev => [...prev, ...message]);
+            return;
+          }
         }
       }
 
