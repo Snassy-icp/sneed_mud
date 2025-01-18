@@ -22,7 +22,7 @@ export const SUPPORTED_TOKENS = {
     symbol: "SNEED",
     name: "Sneed",
     decimals: 8,
-    fee: 10000n // 0.0001 SNEED
+    fee: 1000n // 0.00001 SNEED
   }
 };
 

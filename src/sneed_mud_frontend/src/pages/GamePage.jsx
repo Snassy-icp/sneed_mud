@@ -4,7 +4,7 @@ import { Principal } from '@dfinity/principal';
 import TextLog from '../components/game/TextLog';
 import RoomInterface from '../components/game/RoomInterface';
 import { getAllBalances, transferTokens, isValidPrincipal } from '../utils/WalletManager';
-import { getWalletPreferences, saveWalletPreferences } from '../utils/TokenConfig';
+import { getWalletPreferences, saveWalletPreferences, SUPPORTED_TOKENS } from '../utils/TokenConfig';
 import { HttpAgent } from "@dfinity/agent";
 
 function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }) {
