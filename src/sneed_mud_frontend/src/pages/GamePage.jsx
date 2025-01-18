@@ -663,23 +663,61 @@ Help:
           // First check if it's a player
           const targetPlayer = playersInRoom.find(([_, name]) => name.toLowerCase() === targetName.toLowerCase());
           if (targetPlayer) {
-            setMessages(prev => [...prev, `${targetPlayer[1]} is here.`]);
+            try {
+              const result = await authenticatedActor.lookAtPlayer(targetPlayer[1]);
+              if ('ok' in result) {
+                setMessages(prev => [...prev, result.ok]);
+              } else {
+                setMessages(prev => [...prev, 
+                  `${targetPlayer[1]} is here.`,
+                  result.err
+                ]);
+              }
+            } catch (error) {
+              console.error("Error examining player:", error);
+              setMessages(prev => [...prev, `${targetPlayer[1]} is here.`]);
+            }
             return;
           }
 
           // Then check if it's an exit
           if (currentRoom.exits) {
-            const matchingExit = currentRoom.exits.find(([_, exit]) => 
-              exit.name.toLowerCase() === targetName.toLowerCase() ||
-              (exit.direction && exit.direction.toLowerCase() === targetName.toLowerCase())
-            );
+            // Map common direction abbreviations
+            const directionMap = {
+              'n': 'north',
+              's': 'south',
+              'e': 'east',
+              'w': 'west',
+              'ne': 'northeast',
+              'nw': 'northwest',
+              'se': 'southeast',
+              'sw': 'southwest',
+              'u': 'up',
+              'd': 'down'
+            };
+
+            const searchName = targetName.toLowerCase();
+            const expandedDirection = directionMap[searchName] || searchName;
+
+            const matchingExit = currentRoom.exits.find(([_, exit]) => {
+              const exitName = exit.name.toLowerCase();
+              const exitDirection = typeof exit.direction === 'string' ? exit.direction.toLowerCase() : '';
+              
+              return exitName.includes(expandedDirection) || exitDirection.includes(expandedDirection);
+            });
             if (matchingExit) {
               const [_, exit] = matchingExit;
-              const directionStr = exit.direction ? ` (${exit.direction})` : '';
+              const directionStr = typeof exit.direction === 'string' ? ` (${exit.direction})` : '';
               setMessages(prev => [...prev, 
                 `${exit.name}${directionStr}`,
                 exit.description
               ]);
+              return;
+            }
+
+            // If we were looking for a direction but didn't find a matching exit
+            if (directionMap[searchName] || Object.values(directionMap).includes(searchName)) {
+              setMessages(prev => [...prev, `You see no exit in that direction.`]);
               return;
             }
           }
