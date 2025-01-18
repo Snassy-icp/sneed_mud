@@ -3,12 +3,16 @@ import { Navigate } from 'react-router-dom';
 import { Principal } from '@dfinity/principal';
 import TextLog from '../components/game/TextLog';
 import RoomInterface from '../components/game/RoomInterface';
+import { getAllBalances, transferTokens, isValidPrincipal } from '../utils/WalletManager';
+import { getWalletPreferences, saveWalletPreferences } from '../utils/TokenConfig';
 
 function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }) {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [playersInRoom, setPlayersInRoom] = useState([]);
   const [lastMessageId, setLastMessageId] = useState(null);
+  const [pendingTransfer, setPendingTransfer] = useState(null);
+  const [walletPreferences, setWalletPreferences] = useState(() => getWalletPreferences());
 
   // Helper functions
   function createItemSubaccount(itemId) {
@@ -301,6 +305,109 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
   async function handleCommand(command) {
     try {
+      // Handle pending transfer confirmation
+      if (pendingTransfer && (command.toLowerCase() === 'yes' || command.toLowerCase() === 'no')) {
+        if (command.toLowerCase() === 'yes') {
+          try {
+            const { tokenSymbol, targetPrincipal, amount } = pendingTransfer;
+            const txId = await transferTokens(
+              tokenSymbol,
+              principal,
+              targetPrincipal,
+              amount,
+              authenticatedActor.getAgent()
+            );
+            setMessages(prev => [...prev, `Transaction successful! Transaction ID: ${txId}`]);
+          } catch (error) {
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } else {
+          setMessages(prev => [...prev, "Transfer cancelled."]);
+        }
+        setPendingTransfer(null);
+        return;
+      }
+
+      // Handle wallet commands
+      if (command === '/wallet') {
+        try {
+          const balances = await getAllBalances(
+            principal,
+            authenticatedActor.getAgent(),
+            walletPreferences.hideZeroBalances
+          );
+          
+          setMessages(prev => [
+            ...prev,
+            "Wallet:",
+            `Principal: ${principal}`,
+            ...balances.map(b => `${b.symbol} (${b.name}): ${b.formatted}${b.error ? ` (Error: ${b.error})` : ''}`)
+          ]);
+        } catch (error) {
+          setMessages(prev => [...prev, `Error fetching balances: ${error.message}`]);
+        }
+        return;
+      }
+
+      if (command === '/wallet hide_zero') {
+        const newPreferences = { ...walletPreferences, hideZeroBalances: true };
+        setWalletPreferences(newPreferences);
+        saveWalletPreferences(newPreferences);
+        setMessages(prev => [...prev, "Zero balances will be hidden in wallet display"]);
+        return;
+      }
+
+      if (command === '/wallet show_zero') {
+        const newPreferences = { ...walletPreferences, hideZeroBalances: false };
+        setWalletPreferences(newPreferences);
+        saveWalletPreferences(newPreferences);
+        setMessages(prev => [...prev, "All balances will be shown in wallet display"]);
+        return;
+      }
+
+      // Handle send command
+      if (command.toLowerCase().startsWith('/send ')) {
+        const sendMatch = command.match(/^\/send\s+([\d.]+)\s+(\w+)\s+to\s+(.+)$/i);
+        if (!sendMatch) {
+          setMessages(prev => [...prev, "Error: Send command format is '/send <amount> <token> to <player/principal>'"]);
+          return;
+        }
+
+        const [_, amountStr, tokenSymbol, target] = sendMatch;
+        const amount = parseFloat(amountStr);
+        
+        if (isNaN(amount) || amount <= 0) {
+          setMessages(prev => [...prev, "Error: Invalid amount"]);
+          return;
+        }
+
+        const upperTokenSymbol = tokenSymbol.toUpperCase();
+        if (!SUPPORTED_TOKENS[upperTokenSymbol]) {
+          setMessages(prev => [...prev, `Error: Unsupported token ${tokenSymbol}`]);
+          return;
+        }
+
+        let targetPrincipal;
+        if (isValidPrincipal(target)) {
+          targetPrincipal = target;
+        } else {
+          // Try to find player's principal
+          const targetPlayer = playersInRoom.find(([_, name]) => name === target);
+          if (!targetPlayer) {
+            setMessages(prev => [...prev, `Error: Player ${target} not found in room`]);
+            return;
+          }
+          targetPrincipal = targetPlayer[0].toString();
+        }
+
+        setPendingTransfer({ tokenSymbol: upperTokenSymbol, targetPrincipal, amount });
+        setMessages(prev => [
+          ...prev,
+          `Are you sure you want to send ${amount} ${upperTokenSymbol} to ${target} (principal: ${targetPrincipal})? Type 'yes' to confirm.`
+        ]);
+        return;
+      }
+
       // Handle help command (/help or /?)
       if (command === '/help' || command === '/?') {
         setMessages(prev => [...prev, `Available commands:
@@ -323,6 +430,12 @@ Containers:
   /open <container> - Open a container
   /close <container> - Close a container
   /put <item> in|into <container> - Put an item into a container
+
+Wallet:
+  /wallet - Show your wallet balances and principal
+  /wallet hide_zero - Hide zero balances in wallet display
+  /wallet show_zero - Show all balances in wallet display
+  /send <amount> <token> to <player/principal> - Send tokens to a player or principal
 
 Admin Commands (Realm Owners only):
   /create_room "Room Name", "Room Description" - Create a new room
