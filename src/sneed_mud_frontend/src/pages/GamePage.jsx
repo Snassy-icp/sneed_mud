@@ -9,6 +9,14 @@ import { HttpAgent } from "@dfinity/agent";
 import { AuthClient } from "@dfinity/auth-client";
 
 function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }) {
+  if (!principal) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!playerName) {
+    return <Navigate to="/register" replace />;
+  }
+
   const [currentRoom, setCurrentRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [playersInRoom, setPlayersInRoom] = useState([]);

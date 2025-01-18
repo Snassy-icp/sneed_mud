@@ -1,17 +1,13 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
-function CharacterRegistrationPage({ isAuthenticated, playerName, authenticatedActor, setPlayerName }) {
+function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet }) {
+  if (!principal) {
+    return <Navigate to="/" replace />;
+  }
+
   const [registrationError, setRegistrationError] = useState(null);
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (playerName) {
-    return <Navigate to="/game" replace />;
-  }
 
   async function handleNameRegistration(event) {
     event.preventDefault();
@@ -23,7 +19,7 @@ function CharacterRegistrationPage({ isAuthenticated, playerName, authenticatedA
       const result = await authenticatedActor.registerPlayerName(name);
       if ('ok' in result) {
         setRegistrationSuccess(result.ok);
-        setPlayerName(name);
+        onNameSet(name);
       } else if ('err' in result) {
         setRegistrationError(result.err);
       }

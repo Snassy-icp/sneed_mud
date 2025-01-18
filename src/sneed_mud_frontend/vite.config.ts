@@ -1,18 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import environment from 'vite-plugin-environment'
-import dotenv from 'dotenv'
 import path from 'path'
-
-dotenv.config()
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
-    environment('all', { prefix: 'CANISTER_ID_' }),
-    environment('all', { prefix: 'DFX_' })
+    react()
   ],
+  envPrefix: ['VITE_', 'CANISTER_ID_', 'DFX_'],
   server: {
     proxy: {
       '/api': {

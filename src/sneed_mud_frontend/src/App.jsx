@@ -9,6 +9,20 @@ import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import CharacterRegistrationPage from './pages/CharacterRegistrationPage';
 import GamePage from './pages/GamePage';
+import config from './config.json';
+
+// Get the environment from config
+const isStaging = config.environment === 'staging';
+const BACKEND_CANISTER_ID = config.backendCanisterId;
+
+console.log('Config:', config);
+console.log('Environment detection:', {
+  isStaging,
+  BACKEND_CANISTER_ID,
+});
+
+console.log('Running on:', isStaging ? 'Staging' : 'Production');
+console.log('Using backend:', BACKEND_CANISTER_ID);
 
 function App() {
   const [principal, setPrincipal] = useState(null);
@@ -17,14 +31,28 @@ function App() {
   const [playerName, setPlayerName] = useState(null);
   const [authenticatedActor, setAuthenticatedActor] = useState(null);
 
+  // Debug log whenever auth state changes
+  useEffect(() => {
+    console.log('Auth state changed:', {
+      hasPrincipal: !!principal,
+      hasAuthClient: !!authClient,
+      isLoading,
+      hasPlayerName: !!playerName,
+      hasAuthenticatedActor: !!authenticatedActor
+    });
+  }, [principal, authClient, isLoading, playerName, authenticatedActor]);
+
   // Initialize auth client
   useEffect(() => {
+    console.log('Initializing auth client...');
     AuthClient.create().then(async client => {
+      console.log('Auth client created');
       setAuthClient(client);
       const isAuthenticated = await client.isAuthenticated();
+      console.log('Initial auth check:', isAuthenticated);
       
       if (!isAuthenticated) {
-        // Clear all auth state if not authenticated
+        console.log('Not authenticated, clearing state');
         setPrincipal(null);
         setPlayerName(null);
         setAuthenticatedActor(null);
@@ -35,26 +63,30 @@ function App() {
       try {
         const identity = client.getIdentity();
         const principalStr = identity.getPrincipal().toString();
+        console.log('Got identity with principal:', principalStr);
         setPrincipal(principalStr);
         
         const agent = new HttpAgent({ identity });
-        if (process.env.NODE_ENV !== "production") {
-          await agent.fetchRootKey();
-        }
         
+        console.log('Creating actor with backend:', BACKEND_CANISTER_ID);
         const actor = Actor.createActor(idlFactory, {
           agent,
-          canisterId: process.env.CANISTER_ID_SNEED_MUD_BACKEND,
+          canisterId: BACKEND_CANISTER_ID,
         });
         
         setAuthenticatedActor(actor);
         
         // Check player name
         const principalObj = Principal.fromText(principalStr);
+        console.log('Fetching player name for principal:', principalObj.toString());
         const nameOpt = await actor.getPlayerName(principalObj);
+        console.log('Player name response:', nameOpt);
+        
         if (Array.isArray(nameOpt) && nameOpt.length > 0) {
+          console.log('Setting player name to:', nameOpt[0]);
           setPlayerName(nameOpt[0]);
         } else {
+          console.log('No player name found');
           setPlayerName(null);
         }
       } catch (error) {
@@ -75,8 +107,9 @@ function App() {
 
     const checkAuth = async () => {
       const isAuthenticated = await authClient.isAuthenticated();
+      console.log('Periodic auth check:', isAuthenticated);
       if (!isAuthenticated) {
-        // Clear auth state if no longer authenticated
+        console.log('No longer authenticated, clearing state');
         setPrincipal(null);
         setPlayerName(null);
         setAuthenticatedActor(null);
@@ -89,12 +122,10 @@ function App() {
 
   async function createAuthenticatedActor(identity) {
     const agent = new HttpAgent({ identity });
-    if (process.env.NODE_ENV !== "production") {
-      await agent.fetchRootKey();
-    }
+    // No need to fetch root key in production/staging
     return Actor.createActor(idlFactory, {
       agent,
-      canisterId: process.env.CANISTER_ID_SNEED_MUD_BACKEND,
+      canisterId: BACKEND_CANISTER_ID,
     });
   }
 
@@ -120,9 +151,11 @@ function App() {
     if (!authClient) return;
 
     try {
-      const iiUrl = process.env.DFX_NETWORK === "ic" 
-        ? "https://identity.ic0.app/#authorize" 
-        : `http://localhost:4943?canisterId=${process.env.CANISTER_ID_INTERNET_IDENTITY}#authorize`;
+      console.log('Starting login process...');
+      // When in staging or production, always use the IC network II
+      const iiUrl = "https://identity.ic0.app/#authorize";
+      
+      console.log('Using II URL:', iiUrl);
     
       await new Promise((resolve, reject) => {
         authClient.login({
@@ -133,28 +166,33 @@ function App() {
       });
     
       const isAuthenticated = await authClient.isAuthenticated();
+      console.log('Authentication status:', isAuthenticated);
+      
       if (!isAuthenticated) {
         throw new Error("Authentication failed");
       }
 
       const identity = authClient.getIdentity();
       const principalStr = identity.getPrincipal().toString();
+      console.log('Got principal:', principalStr);
       setPrincipal(principalStr);
       
       const agent = new HttpAgent({ identity });
-      if (process.env.NODE_ENV !== "production") {
-        await agent.fetchRootKey();
-      }
+      // No need to fetch root key in production/staging
       
+      console.log('Creating actor with backend canister:', BACKEND_CANISTER_ID);
       const actor = Actor.createActor(idlFactory, {
         agent,
-        canisterId: process.env.CANISTER_ID_SNEED_MUD_BACKEND,
+        canisterId: BACKEND_CANISTER_ID,
       });
       
       setAuthenticatedActor(actor);
       
       const principalObj = Principal.fromText(principalStr);
+      console.log('Fetching player name...');
       const nameOpt = await actor.getPlayerName(principalObj);
+      console.log('Player name response:', nameOpt);
+      
       if (Array.isArray(nameOpt) && nameOpt.length > 0) {
         setPlayerName(nameOpt[0]);
       } else {
@@ -177,18 +215,46 @@ function App() {
     setAuthenticatedActor(null);
   }
 
+  // Render logic
   if (isLoading) {
+    console.log('Rendering loading state');
     return <div>Loading...</div>;
   }
+
+  console.log('Rendering main app with auth state:', {
+    hasPrincipal: !!principal,
+    hasPlayerName: !!playerName
+  });
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Layout isAuthenticated={!!principal} playerName={playerName} onLogout={logout} />}>
-          <Route index element={<LoginPage isAuthenticated={!!principal} isLoading={isLoading} login={loginII} playerName={playerName} />} />
-          <Route path="login" element={<LoginPage isAuthenticated={!!principal} isLoading={isLoading} login={loginII} playerName={playerName} />} />
-          <Route path="register" element={<CharacterRegistrationPage isAuthenticated={!!principal} playerName={playerName} authenticatedActor={authenticatedActor} setPlayerName={setPlayerName} />} />
-          <Route path="game" element={<GamePage isAuthenticated={!!principal} playerName={playerName} authenticatedActor={authenticatedActor} principal={principal} />} />
+        <Route path="/" element={<Layout 
+          isAuthenticated={!!principal}
+          playerName={playerName}
+          onLogout={logout}
+        />}>
+          <Route index element={<LoginPage 
+            onLogin={loginII} 
+            isAuthenticated={!!principal}
+            isLoading={isLoading}
+            playerName={playerName}
+          />} />
+          <Route path="/register" element={
+            <CharacterRegistrationPage
+              authenticatedActor={authenticatedActor}
+              principal={principal}
+              onNameSet={setPlayerName}
+            />
+          } />
+          <Route path="/game" element={
+            <GamePage
+              isAuthenticated={!!principal}
+              playerName={playerName}
+              authenticatedActor={authenticatedActor}
+              principal={principal}
+            />
+          } />
         </Route>
       </Routes>
     </BrowserRouter>
