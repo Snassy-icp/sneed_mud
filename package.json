@@ -9,7 +9,7 @@
     "build": "npm run build --workspaces --if-present",
     "build:frontend": "cd src/sneed_mud_frontend && npm run build",
     "deploy": "npm run deploy:ic",
-    "deploy:ic": "npm run build:frontend && dfx deploy --network ic",
+    "deploy:ic": "dfx generate sneed_mud_backend && npm run build:frontend && dfx deploy --network ic",
     "deploy:local": "npm run build:frontend && dfx deploy"
   }
 }
