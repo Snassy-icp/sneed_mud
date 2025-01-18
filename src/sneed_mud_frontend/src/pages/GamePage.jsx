@@ -967,6 +967,9 @@ Help:
             const result = await authenticatedActor.createRoom(name, description);
             if ('err' in result) {
               setMessages(prev => [...prev, `Error: ${result.err}`]);
+            } else {
+              const roomId = result.ok;
+              setMessages(prev => [...prev, `Successfully created room "${name}" (ID: ${roomId})`]);
             }
           } catch (error) {
             console.error("Error creating room:", error);
@@ -992,15 +995,24 @@ Help:
           
           const [_, exitId, name, description, targetRoomId, direction] = matches;
           try {
-            const result = await authenticatedActor.createExit(
+            if (!currentRoom) {
+              setMessages(prev => [...prev, 'Error: You must be in a room to create an exit']);
+              return;
+            }
+
+            const result = await authenticatedActor.addExit(
+              currentRoom.id,
               exitId,
-              name,
+              name, 
               description,
               BigInt(targetRoomId),
               direction ? [direction] : []
             );
+            
             if ('err' in result) {
               setMessages(prev => [...prev, `Error: ${result.err}`]);
+            } else {
+              setMessages(prev => [...prev, `Successfully created exit "${name}" (ID: ${exitId}) leading to room ${targetRoomId}${direction ? ` in direction ${direction}` : ''}`]);
             }
           } catch (error) {
             console.error("Error creating exit:", error);
