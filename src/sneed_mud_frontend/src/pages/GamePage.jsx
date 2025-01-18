@@ -4,8 +4,9 @@ import { Principal } from '@dfinity/principal';
 import TextLog from '../components/game/TextLog';
 import RoomInterface from '../components/game/RoomInterface';
 import { getAllBalances, transferTokens, isValidPrincipal } from '../utils/WalletManager';
-import { getWalletPreferences, saveWalletPreferences, SUPPORTED_TOKENS } from '../utils/TokenConfig';
+import { getWalletPreferences, saveWalletPreferences, SUPPORTED_TOKENS, parseTokenAmount } from '../utils/TokenConfig';
 import { HttpAgent } from "@dfinity/agent";
+import { AuthClient } from "@dfinity/auth-client";
 
 function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }) {
   const [currentRoom, setCurrentRoom] = useState(null);
@@ -14,26 +15,14 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
   const [lastMessageId, setLastMessageId] = useState(null);
   const [pendingTransfer, setPendingTransfer] = useState(null);
   const [walletPreferences, setWalletPreferences] = useState(() => getWalletPreferences());
-  const [agent, setAgent] = useState(null);
+  const [authClient, setAuthClient] = useState(null);
 
-  // Update useEffect to properly handle agent initialization
+  // Initialize auth client
   useEffect(() => {
-    async function initAgent() {
-      if (isAuthenticated && principal && authenticatedActor) {
-        const newAgent = new HttpAgent({ 
-          host: process.env.DFX_NETWORK === "ic" ? "https://ic0.app" : "http://localhost:4943",
-          identity: authenticatedActor._identity // Use the identity from authenticatedActor
-        });
-        
-        if (process.env.DFX_NETWORK !== "ic") {
-          await newAgent.fetchRootKey().catch(console.error);
-        }
-        
-        setAgent(newAgent);
-      }
-    }
-    initAgent();
-  }, [isAuthenticated, principal, authenticatedActor]);
+    AuthClient.create().then(client => {
+      setAuthClient(client);
+    });
+  }, []);
 
   // Helper functions
   function createItemSubaccount(itemId) {
@@ -331,6 +320,11 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         if (command.toLowerCase() === 'yes') {
           try {
             const { tokenSymbol, targetPrincipal, amount } = pendingTransfer;
+            const identity = authClient.getIdentity();
+            const agent = new HttpAgent({ identity });
+            if (process.env.NODE_ENV !== "production") {
+              await agent.fetchRootKey();
+            }
             const txId = await transferTokens(
               tokenSymbol,
               principal,
@@ -351,17 +345,17 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
       // Handle wallet commands
       if (command === '/wallet') {
-        if (!agent) {
-          setMessages(prev => [...prev, "Error: Wallet not initialized yet. Please try again in a moment."]);
-          return;
-        }
         try {
+          const identity = authClient.getIdentity();
+          const agent = new HttpAgent({ identity });
+          if (process.env.NODE_ENV !== "production") {
+            await agent.fetchRootKey();
+          }
           const balances = await getAllBalances(
             principal,
-            agent,
-            walletPreferences.hideZeroBalances
+            walletPreferences.hideZeroBalances,
+            agent
           );
-          
           setMessages(prev => [
             ...prev,
             "Wallet:",
@@ -391,45 +385,55 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       }
 
       // Handle send command
-      if (command.toLowerCase().startsWith('/send ')) {
-        const sendMatch = command.match(/^\/send\s+([\d.]+)\s+(\w+)\s+to\s+(.+)$/i);
-        if (!sendMatch) {
-          setMessages(prev => [...prev, "Error: Send command format is '/send <amount> <token> to <player/principal>'"]);
+      if (command.startsWith('/send ')) {
+        const match = command.match(/^\/send (\d+\.?\d*) (\w+)( to (.+))?$/);
+        if (!match) {
+          setMessages(prev => [...prev, "Invalid send command. Format: /send <amount> <token> [to <recipient>]"]);
           return;
         }
 
-        const [_, amountStr, tokenSymbol, target] = sendMatch;
-        const amount = parseFloat(amountStr);
-        
-        if (isNaN(amount) || amount <= 0) {
-          setMessages(prev => [...prev, "Error: Invalid amount"]);
+        const [, amountStr, tokenSymbol, , recipient = "Sneedy"] = match;
+        const config = SUPPORTED_TOKENS[tokenSymbol];
+        if (!config) {
+          setMessages(prev => [...prev, `Unsupported token: ${tokenSymbol}`]);
           return;
         }
 
-        const upperTokenSymbol = tokenSymbol.toUpperCase();
-        if (!SUPPORTED_TOKENS[upperTokenSymbol]) {
-          setMessages(prev => [...prev, `Error: Unsupported token ${tokenSymbol}`]);
-          return;
-        }
+        try {
+          const amount = parseTokenAmount(amountStr, config.decimals);
+          const targetPrincipal = recipient === "Sneedy" ? "2jotg-jptnv-ddvwa-q3ijs-qkd4u-tkycr-eslc7-ekkny-slpb7-t4hwj-mqe" : recipient;
 
-        let targetPrincipal;
-        if (isValidPrincipal(target)) {
-          targetPrincipal = target;
-        } else {
-          // Try to find player's principal
-          const targetPlayer = playersInRoom.find(([_, name]) => name === target);
-          if (!targetPlayer) {
-            setMessages(prev => [...prev, `Error: Player ${target} not found in room`]);
-            return;
-          }
-          targetPrincipal = targetPlayer[0].toString();
-        }
+          setMessages(prev => [...prev, 
+            `Are you sure you want to send ${amountStr} ${tokenSymbol} to ${recipient} (principal: ${targetPrincipal})?`,
+            "Type 'yes' to confirm."
+          ]);
 
-        setPendingTransfer({ tokenSymbol: upperTokenSymbol, targetPrincipal, amount });
-        setMessages(prev => [
-          ...prev,
-          `Are you sure you want to send ${amount} ${upperTokenSymbol} to ${target} (principal: ${targetPrincipal})? Type 'yes' to confirm.`
-        ]);
+          setPendingTransfer({
+            tokenSymbol,
+            amount,
+            targetPrincipal
+          });
+        } catch (error) {
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
+      }
+
+      // Handle transfer confirmation
+      if (command === 'yes' && pendingTransfer) {
+        try {
+          await transferTokens(
+            pendingTransfer.tokenSymbol,
+            pendingTransfer.fromPrincipal,
+            pendingTransfer.toPrincipal,
+            pendingTransfer.amount,
+            authenticatedActor
+          );
+          setMessages(prev => [...prev, `Successfully sent ${formatTokenAmount(pendingTransfer.amount, SUPPORTED_TOKENS[pendingTransfer.tokenSymbol].decimals)} ${pendingTransfer.tokenSymbol} to ${pendingTransfer.toPrincipal}`]);
+        } catch (error) {
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        setPendingTransfer(null);
         return;
       }
 
