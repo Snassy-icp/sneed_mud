@@ -49,6 +49,17 @@ module {
     };
   };
 
+  // Send a system message to a specific player
+  public func sendSystemMessage(state: MudState, targetPrincipal: Principal, content: Text) : Result.Result<(), Text> {
+    switch (state.players.get(targetPrincipal)) {
+      case null { #err("Target player not found") };
+      case (?_) {
+        addMessageToLog(state, targetPrincipal, content);
+        #ok(())
+      };
+    }
+  };
+
   public func broadcastToRoom(state: MudState, roomId: RoomId, content: Text) {
     for ((principal, location) in state.playerLocations.entries()) {
       if (location == roomId) {

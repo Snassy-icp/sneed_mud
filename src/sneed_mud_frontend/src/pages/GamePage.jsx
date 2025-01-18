@@ -4,7 +4,7 @@ import { Principal } from '@dfinity/principal';
 import TextLog from '../components/game/TextLog';
 import RoomInterface from '../components/game/RoomInterface';
 import { getAllBalances, transferTokens, isValidPrincipal } from '../utils/WalletManager';
-import { getWalletPreferences, saveWalletPreferences, SUPPORTED_TOKENS, parseTokenAmount } from '../utils/TokenConfig';
+import { getWalletPreferences, saveWalletPreferences, SUPPORTED_TOKENS, parseTokenAmount, formatTokenAmount } from '../utils/TokenConfig';
 import { HttpAgent } from "@dfinity/agent";
 import { AuthClient } from "@dfinity/auth-client";
 
@@ -319,7 +319,7 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (pendingTransfer && (command.toLowerCase() === 'yes' || command.toLowerCase() === 'no')) {
         if (command.toLowerCase() === 'yes') {
           try {
-            const { tokenSymbol, targetPrincipal, amount } = pendingTransfer;
+            const { tokenSymbol, targetPrincipal, amount, recipientName, senderName } = pendingTransfer;
             const identity = authClient.getIdentity();
             const agent = new HttpAgent({ identity });
             if (process.env.NODE_ENV !== "production") {
@@ -332,7 +332,23 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
               amount,
               agent
             );
-            setMessages(prev => [...prev, `Transaction successful! Transaction ID: ${txId}`]);
+
+            // Send personalized messages to both parties
+            try {
+              const formattedAmount = formatTokenAmount(amount, SUPPORTED_TOKENS[tokenSymbol].decimals);
+              await authenticatedActor.notifyTokenTransfer(
+                Principal.fromText(principal),
+                Principal.fromText(targetPrincipal),
+                senderName,
+                recipientName,
+                formattedAmount,
+                tokenSymbol,
+                txId.toString()
+              );
+            } catch (error) {
+              console.error("Error sending system messages:", error);
+            }
+
           } catch (error) {
             setMessages(prev => [...prev, `Error: ${error.message}`]);
           }
@@ -401,17 +417,42 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
         try {
           const amount = parseTokenAmount(amountStr, config.decimals);
-          const targetPrincipal = recipient;
+          let targetPrincipal;
+          let recipientName = recipient;
+
+          // First try to get the principal if it's a player name
+          try {
+            const playerResult = await authenticatedActor.getPrincipalByName(recipient);
+            if ('ok' in playerResult) {
+              targetPrincipal = playerResult.ok.toText();
+              recipientName = recipient; // Keep the player name
+            } else {
+              // Not a player name, check if it's a valid principal
+              try {
+                Principal.fromText(recipient);
+                targetPrincipal = recipient;
+                recipientName = recipient; // Just use the principal as the name if not a player
+              } catch (error) {
+                setMessages(prev => [...prev, `Error: "${recipient}" is neither a valid player name nor a valid principal ID`]);
+                return;
+              }
+            }
+          } catch (error) {
+            setMessages(prev => [...prev, `Error looking up recipient: ${error.message}`]);
+            return;
+          }
 
           setMessages(prev => [...prev, 
-            `Are you sure you want to send ${amountStr} ${tokenSymbol} to ${recipient} (principal: ${targetPrincipal})?`,
+            `Are you sure you want to send ${amountStr} ${tokenSymbol} to ${recipientName} (principal: ${targetPrincipal})?`,
             "Type 'yes' to confirm."
           ]);
 
           setPendingTransfer({
             tokenSymbol,
             amount,
-            targetPrincipal
+            targetPrincipal,
+            recipientName,
+            senderName: playerName
           });
         } catch (error) {
           setMessages(prev => [...prev, `Error: ${error.message}`]);

@@ -299,6 +299,52 @@ actor class MudBackend() = this {
     Lib.whisper(state, msg.caller, targetName, message)
   };
 
+  // Send a system message to a specific player
+  public shared(msg) func sendSystemMessage(targetPrincipal: Principal, content: Text) : async Result.Result<(), Text> {
+    // Only allow the canister itself to send system messages
+    if (Principal.equal(msg.caller, Principal.fromActor(this))) {
+      Lib.sendSystemMessage(state, targetPrincipal, content)
+    } else {
+      #err("Only the system can send system messages")
+    }
+  };
+
+  // Handle token transfer notifications
+  public shared(msg) func notifyTokenTransfer(
+    senderPrincipal: Principal,
+    recipientPrincipal: Principal,
+    senderName: Text,
+    recipientName: Text,
+    amount: Text,
+    tokenSymbol: Text,
+    txId: Text
+  ) : async Result.Result<(), Text> {
+    // Verify that the caller is a registered player
+    switch (state.players.get(msg.caller)) {
+      case null { #err("Only registered players can send token transfer notifications") };
+      case (?callerName) {
+        // Verify that the caller is actually the sender
+        if (not Principal.equal(msg.caller, senderPrincipal)) {
+          return #err("You can only notify about your own transfers");
+        };
+        // Verify that the caller's name matches the provided sender name
+        if (callerName != senderName) {
+          return #err("Sender name mismatch");
+        };
+
+        // Create the messages
+        let senderMessage = "You sent " # amount # " " # tokenSymbol # " to " # recipientName # " (Transaction ID: " # txId # ")";
+        let recipientMessage = senderName # " sent you " # amount # " " # tokenSymbol # " (Transaction ID: " # txId # ")";
+
+        // Send messages
+        ignore Lib.sendSystemMessage(state, senderPrincipal, senderMessage);
+        ignore Lib.sendSystemMessage(state, recipientPrincipal, recipientMessage);
+        
+        #ok(())
+      };
+    }
+  };
+
   // Character creation and stats
   public shared(msg) func createCharacter() : async Result.Result<(), Text> {
     Lib.createCharacter(state, msg.caller)
@@ -322,6 +368,14 @@ actor class MudBackend() = this {
           };
         }
       };
+    }
+  };
+
+  // Get a player's principal from their name
+  public query func getPrincipalByName(name : Text) : async Result.Result<Principal, Text> {
+    switch (state.usedNames.get(name)) {
+      case null { #err("Player not found") };
+      case (?principal) { #ok(principal) };
     }
   };
 }
