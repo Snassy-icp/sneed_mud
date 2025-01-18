@@ -7,9 +7,11 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "build:frontend": "cd src/sneed_mud_frontend && npm run build",
+    "build:frontend": "cd src/sneed_mud_frontend && CANISTER_ID_SNEED_MUD_BACKEND=$(dfx canister id sneed_mud_backend) npm run build",
+    "build:frontend:staging": "cd src/sneed_mud_frontend && CANISTER_ID_SNEED_MUD_BACKEND=$(dfx canister id sneed_mud_backend_staging) npm run build",
     "deploy": "npm run deploy:ic",
-    "deploy:ic": "dfx generate sneed_mud_backend && npm run build:frontend && dfx deploy --network ic",
+    "deploy:ic": "dfx generate sneed_mud_backend && npm run build:frontend && dfx deploy --network ic sneed_mud_backend sneed_mud_frontend",
+    "deploy:staging": "dfx generate sneed_mud_backend_staging && npm run build:frontend:staging && dfx deploy --network ic sneed_mud_backend_staging && dfx deploy --network ic sneed_mud_frontend_staging",
     "deploy:local": "npm run build:frontend && dfx deploy"
   }
 }

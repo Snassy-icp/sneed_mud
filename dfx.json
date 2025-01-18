@@ -24,6 +24,20 @@
       ],
       "type": "assets",
       "workspace": "sneed_mud_frontend"
+    },
+    "sneed_mud_backend_staging": {
+      "main": "src/sneed_mud_backend/main.mo",
+      "type": "motoko"
+    },
+    "sneed_mud_frontend_staging": {
+      "dependencies": [
+        "sneed_mud_backend_staging"
+      ],
+      "source": [
+        "src/sneed_mud_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "sneed_mud_frontend"
     }
   },
   "defaults": {

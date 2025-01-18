@@ -10,7 +10,8 @@ dotenv.config()
 export default defineConfig({
   plugins: [
     react(),
-    environment('all')
+    environment('all', { prefix: 'CANISTER_ID_' }),
+    environment('all', { prefix: 'DFX_' })
   ],
   server: {
     proxy: {

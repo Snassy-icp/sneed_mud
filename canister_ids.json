@@ -2,7 +2,13 @@
   "sneed_mud_backend": {
     "ic": "i25t4-rqaaa-aaaaj-qnkoq-cai"
   },
+  "sneed_mud_backend_staging": {
+    "ic": "po4w4-iyaaa-aaaaj-qnk5a-cai"
+  },
   "sneed_mud_frontend": {
     "ic": "it6ya-hyaaa-aaaaj-qnkpa-cai"
+  },
+  "sneed_mud_frontend_staging": {
+    "ic": "pj5qi-faaaa-aaaaj-qnk5q-cai"
   }
 }
