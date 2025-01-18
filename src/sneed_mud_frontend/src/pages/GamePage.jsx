@@ -10,14 +10,6 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
   const [playersInRoom, setPlayersInRoom] = useState([]);
   const [lastMessageId, setLastMessageId] = useState(null);
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!playerName) {
-    return <Navigate to="/register" replace />;
-  }
-
   // Helper functions
   function createItemSubaccount(itemId) {
     const bytes = new Array(32).fill(0);
@@ -56,7 +48,6 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     'sw': 'southwest',
   };
 
-  // Helper function to find matching exit
   function findMatchingExit(command, exits) {
     if (!exits || exits.length === 0) return null;
     
@@ -85,7 +76,6 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     return null;
   }
 
-  // Helper function to get item type name
   async function getItemTypeName(typeId) {
     try {
       const result = await authenticatedActor.getItemType(typeId);
@@ -99,7 +89,6 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     }
   }
 
-  // Helper function to find matching item
   async function findMatchingItem(partialName, inventoryOnly = false) {
     try {
       const inventoryResult = await authenticatedActor.getItems();
@@ -138,7 +127,6 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     }
   }
 
-  // Helper function to format stats
   function formatStats(stats) {
     const level = Number(stats.base.level);
     const nextLevelXp = level === 1 ? 2000 : 
@@ -150,6 +138,60 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
            `MP: ${Number(stats.dynamic.mp)}/${Number(stats.base.maxMp)}\n` +
            `XP: ${Number(stats.dynamic.xp)}/${nextLevelXp} (${xpNeeded} more needed for next level)`;
   }
+
+  async function fetchMessages() {
+    try {
+      const lastIdParam = lastMessageId === null ? [] : [lastMessageId];
+      const newMessages = await authenticatedActor.getMessages(lastIdParam);
+      if (newMessages.length > 0) {
+        newMessages.sort((a, b) => Number(BigInt(a.id) - BigInt(b.id)));
+        const currentLastId = lastMessageId === null ? -1n : lastMessageId;
+        const uniqueNewMessages = newMessages.filter(msg => BigInt(msg.id) > currentLastId);
+        
+        if (uniqueNewMessages.length > 0) {
+          setMessages(prev => [...prev, ...uniqueNewMessages.map(msg => msg.content)]);
+          const newLastId = BigInt(uniqueNewMessages[uniqueNewMessages.length - 1].id);
+          if (newLastId > currentLastId) {
+            setLastMessageId(newLastId);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    }
+  }
+
+  async function updateCurrentRoom() {
+    try {
+      const result = await authenticatedActor.getCurrentRoom();
+      if ('ok' in result) {
+        const room = result.ok;
+        const playersResult = await authenticatedActor.getPlayersInRoom(room.id);
+        if ('ok' in playersResult) {
+          setPlayersInRoom(playersResult.ok);
+        }
+        setCurrentRoom(room);
+      }
+    } catch (error) {
+      console.error("Error updating room:", error);
+    }
+  }
+
+  useEffect(() => {
+    if (authenticatedActor && playerName) {
+      updateCurrentRoom();
+      fetchMessages();
+      const roomInterval = setInterval(updateCurrentRoom, 5000);
+      return () => clearInterval(roomInterval);
+    }
+  }, [authenticatedActor, playerName]);
+
+  useEffect(() => {
+    if (authenticatedActor && playerName) {
+      const messageInterval = setInterval(fetchMessages, 1000);
+      return () => clearInterval(messageInterval);
+    }
+  }, [authenticatedActor, playerName, lastMessageId]);
 
   async function handleCommand(command) {
     try {
@@ -176,8 +218,11 @@ Containers:
   /close <container> - Close a container
   /put <item> in|into <container> - Put an item into a container
 
-Character:
-  /stats - View your character stats
+Admin Commands (Realm Owners only):
+  /create_room "Room Name", "Room Description" - Create a new room
+  /create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"] - Create an exit in current room
+  /create_item_type "Name", "Description", is_container, container_capacity, "icon_url", stack_max - Create a new item type
+  /create_item "Item Name"|type_id [count] - Create a new item
 
 Help:
   /help, /? - Show this help message`]);
@@ -607,6 +652,188 @@ Help:
         }
       }
 
+      // Handle create_room command
+      if (command.toLowerCase().startsWith('/create_room ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: "Room Name", "Room Description"
+          const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"$/);
+          if (!matches) {
+            setMessages(prev => [...prev, 'Error: Create room command format is \'/create_room "Room Name", "Room Description"\'']);
+            return;
+          }
+          
+          const [_, name, description] = matches;
+          try {
+            const result = await authenticatedActor.createRoom(name, description);
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            }
+          } catch (error) {
+            console.error("Error creating room:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, 'Error: Create room command format is \'/create_room "Room Name", "Room Description"\'']);
+        }
+        return;
+      }
+
+      // Handle create_exit command
+      if (command.toLowerCase().startsWith('/create_exit ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]
+          const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(\d+)(?:\s*,\s*"([^"]+)")?$/);
+          if (!matches) {
+            setMessages(prev => [...prev, 'Error: Create exit command format is \'/create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]\'']);
+            return;
+          }
+          
+          const [_, exitId, name, description, targetRoomId, direction] = matches;
+          try {
+            const result = await authenticatedActor.createExit(
+              exitId,
+              name,
+              description,
+              BigInt(targetRoomId),
+              direction ? [direction] : []
+            );
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            }
+          } catch (error) {
+            console.error("Error creating exit:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, 'Error: Create exit command format is \'/create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]\'']);
+        }
+        return;
+      }
+
+      // Handle create_item_type command
+      if (command.toLowerCase().startsWith('/create_item_type ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: "Name", "Description", is_container, container_capacity, "icon_url", stack_max
+          const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(true|false)\s*,\s*(\d+|null)\s*,\s*"([^"]+)"\s*,\s*(\d+)$/);
+          if (!matches) {
+            setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number."]);
+            return;
+          }
+          
+          const [_, name, description, isContainer, containerCapacity, iconUrl, stackMax] = matches;
+          try {
+            // First check if an item type with this name already exists
+            const itemTypesResult = await authenticatedActor.getItemTypes();
+            if ('ok' in itemTypesResult) {
+              const existingType = itemTypesResult.ok.find(type => 
+                type.name.toLowerCase() === name.toLowerCase()
+              );
+              if (existingType) {
+                setMessages(prev => [...prev, `Error: An item type with the name "${name}" already exists (ID: ${existingType.id})`]);
+                return;
+              }
+            }
+
+            const result = await authenticatedActor.createItemType(
+              name,
+              description,
+              isContainer === 'true',
+              containerCapacity === 'null' ? [] : [parseInt(containerCapacity)],
+              iconUrl,
+              parseInt(stackMax)
+            );
+            if ('ok' in result) {
+              setMessages(prev => [...prev, `Successfully created item type ${name} with ID ${result.ok}`]);
+            } else if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            }
+          } catch (error) {
+            console.error("Error creating item type:", error);
+            setMessages(prev => [...prev, `Error: Failed to create item type - ${error.message || 'Unknown error'}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number."]);
+        }
+        return;
+      }
+
+      // Handle create item command (/create_item)
+      if (command.toLowerCase().startsWith('/create_item ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        console.log("Create item args:", argsString);
+        
+        try {
+          // Match either "item name" count or typeId count
+          const matches = argsString.match(/^(?:"([^"]+)"|(\d+))(?:\s+(\d+))?$/);
+          if (!matches) {
+            console.log("No regex match for create_item args");
+            setMessages(prev => [...prev, "Error: Create item command format is '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'"]);
+            return;
+          }
+          
+          console.log("Regex matches:", matches);
+          const [_, quotedName, typeIdStr, count] = matches;
+          console.log("Parsed values:", { quotedName, typeIdStr, count });
+          let typeId;
+
+          // First determine the type ID either from name or direct ID
+          if (quotedName) {
+            // Search by name
+            const typesResult = await authenticatedActor.getItemTypes();
+            if ('ok' in typesResult) {
+              const matchingType = typesResult.ok.find(type => 
+                type.name.toLowerCase() === quotedName.toLowerCase()
+              );
+              if (!matchingType) {
+                setMessages(prev => [...prev, `Error: No item type found with name "${quotedName}"`]);
+                return;
+              }
+              typeId = matchingType.id;
+              console.log("Found type ID from name:", typeId);
+            } else {
+              setMessages(prev => [...prev, `Error: Failed to get item types`]);
+              return;
+            }
+          } else {
+            // Use provided type ID
+            typeId = parseInt(typeIdStr);
+            console.log("Using provided type ID:", typeId);
+          }
+
+          // Verify the type exists and get its name
+          const typeResult = await authenticatedActor.getItemType(typeId);
+          if ('err' in typeResult) {
+            setMessages(prev => [...prev, `Error: ${typeResult.err}`]);
+            return;
+          }
+          const typeName = typeResult.ok.name;
+          console.log("Found type name:", typeName);
+
+          // Create the item
+          const result = await authenticatedActor.createItem(
+            typeId,
+            count ? [parseInt(count)] : []
+          );
+          console.log("Create item result:", result);
+          if ('ok' in result) {
+            const countStr = count ? ` (x${count})` : '';
+            setMessages(prev => [...prev, `Successfully created ${typeName}${countStr} with ID ${result.ok}`]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error creating item:", error);
+          setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'"]);
+        }
+        return;
+      }
+
       // If no command matched, show error
       setMessages(prev => [...prev, "Unknown command. Type /help for available commands."]);
     } catch (error) {
@@ -614,58 +841,13 @@ Help:
     }
   }
 
-  useEffect(() => {
-    if (authenticatedActor && playerName) {
-      updateCurrentRoom();
-      fetchMessages();
-      const roomInterval = setInterval(updateCurrentRoom, 5000);
-      return () => clearInterval(roomInterval);
-    }
-  }, [authenticatedActor, playerName]);
-
-  useEffect(() => {
-    if (authenticatedActor && playerName) {
-      const messageInterval = setInterval(fetchMessages, 1000);
-      return () => clearInterval(messageInterval);
-    }
-  }, [authenticatedActor, playerName, lastMessageId]);
-
-  async function fetchMessages() {
-    try {
-      const lastIdParam = lastMessageId === null ? [] : [lastMessageId];
-      const newMessages = await authenticatedActor.getMessages(lastIdParam);
-      if (newMessages.length > 0) {
-        newMessages.sort((a, b) => Number(BigInt(a.id) - BigInt(b.id)));
-        const currentLastId = lastMessageId === null ? -1n : lastMessageId;
-        const uniqueNewMessages = newMessages.filter(msg => BigInt(msg.id) > currentLastId);
-        
-        if (uniqueNewMessages.length > 0) {
-          setMessages(prev => [...prev, ...uniqueNewMessages.map(msg => msg.content)]);
-          const newLastId = BigInt(uniqueNewMessages[uniqueNewMessages.length - 1].id);
-          if (newLastId > currentLastId) {
-            setLastMessageId(newLastId);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-    }
+  // Render section
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
-  async function updateCurrentRoom() {
-    try {
-      const result = await authenticatedActor.getCurrentRoom();
-      if ('ok' in result) {
-        const room = result.ok;
-        const playersResult = await authenticatedActor.getPlayersInRoom(room.id);
-        if ('ok' in playersResult) {
-          setPlayersInRoom(playersResult.ok);
-        }
-        setCurrentRoom(room);
-      }
-    } catch (error) {
-      console.error("Error updating room:", error);
-    }
+  if (!playerName) {
+    return <Navigate to="/register" replace />;
   }
 
   return (
