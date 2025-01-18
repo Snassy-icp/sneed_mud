@@ -5,6 +5,7 @@ import TextLog from '../components/game/TextLog';
 import RoomInterface from '../components/game/RoomInterface';
 import { getAllBalances, transferTokens, isValidPrincipal } from '../utils/WalletManager';
 import { getWalletPreferences, saveWalletPreferences } from '../utils/TokenConfig';
+import { HttpAgent } from "@dfinity/agent";
 
 function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }) {
   const [currentRoom, setCurrentRoom] = useState(null);
@@ -13,6 +14,26 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
   const [lastMessageId, setLastMessageId] = useState(null);
   const [pendingTransfer, setPendingTransfer] = useState(null);
   const [walletPreferences, setWalletPreferences] = useState(() => getWalletPreferences());
+  const [agent, setAgent] = useState(null);
+
+  // Update useEffect to properly handle agent initialization
+  useEffect(() => {
+    async function initAgent() {
+      if (isAuthenticated && principal && authenticatedActor) {
+        const newAgent = new HttpAgent({ 
+          host: process.env.DFX_NETWORK === "ic" ? "https://ic0.app" : "http://localhost:4943",
+          identity: authenticatedActor._identity // Use the identity from authenticatedActor
+        });
+        
+        if (process.env.DFX_NETWORK !== "ic") {
+          await newAgent.fetchRootKey().catch(console.error);
+        }
+        
+        setAgent(newAgent);
+      }
+    }
+    initAgent();
+  }, [isAuthenticated, principal, authenticatedActor]);
 
   // Helper functions
   function createItemSubaccount(itemId) {
@@ -315,7 +336,7 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
               principal,
               targetPrincipal,
               amount,
-              authenticatedActor.getAgent()
+              agent
             );
             setMessages(prev => [...prev, `Transaction successful! Transaction ID: ${txId}`]);
           } catch (error) {
@@ -330,10 +351,14 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
       // Handle wallet commands
       if (command === '/wallet') {
+        if (!agent) {
+          setMessages(prev => [...prev, "Error: Wallet not initialized yet. Please try again in a moment."]);
+          return;
+        }
         try {
           const balances = await getAllBalances(
             principal,
-            authenticatedActor.getAgent(),
+            agent,
             walletPreferences.hideZeroBalances
           );
           

@@ -4,22 +4,25 @@ import { Principal } from "@dfinity/principal";
 // Token configuration type
 export const SUPPORTED_TOKENS = {
   ICP: {
-    ledgerCanisterId: "ryjl3-tyaaa-aaaaa-aaaba-cai", // placeholder, replace with actual
+    ledgerCanisterId: "ryjl3-tyaaa-aaaaa-aaaba-cai", // ICP Ledger
     symbol: "ICP",
     name: "Internet Computer Protocol",
-    decimals: 8
+    decimals: 8,
+    fee: 10000n // 0.0001 ICP
   },
   DKP: {
-    ledgerCanisterId: "zfcdd-tqaaa-aaaaq-aaaga-cai", // placeholder, replace with actual
+    ledgerCanisterId: "zfcdd-tqaaa-aaaaq-aaaga-cai", // Dragginz token
     symbol: "DKP",
     name: "Dragginz",
-    decimals: 8
+    decimals: 8,
+    fee: 10000n // 0.0001 DKP
   },
   SNEED: {
-    ledgerCanisterId: "hvgxa-wqaaa-aaaaq-aacia-cai", // placeholder, replace with actual
+    ledgerCanisterId: "hvgxa-wqaaa-aaaaq-aacia-cai", // Sneed token
     symbol: "SNEED",
     name: "Sneed",
-    decimals: 8
+    decimals: 8,
+    fee: 10000n // 0.0001 SNEED
   }
 };
 
@@ -30,6 +33,7 @@ export function formatTokenAmount(amount, decimals) {
   const integerPart = amountStr.slice(0, -decimals) || "0";
   const fractionalPart = amountStr.slice(-decimals).padStart(decimals, "0");
   const trimmedFractional = fractionalPart.replace(/0+$/, "");
+  // Add commas to integer part
   const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return trimmedFractional ? `${formattedInteger}.${trimmedFractional}` : formattedInteger;
 }
@@ -67,10 +71,7 @@ export function createICRC1Actor(canisterId, agent) {
             TemporarilyUnavailable: IDL.Null,
             GenericError: IDL.Record({ message: IDL.Text, error_code: IDL.Nat })
           })
-        })], []),
-        icrc1_name: IDL.Func([], [IDL.Text], ["query"]),
-        icrc1_symbol: IDL.Func([], [IDL.Text], ["query"]),
-        icrc1_decimals: IDL.Func([], [IDL.Nat8], ["query"])
+        })], [])
       });
     },
     {
