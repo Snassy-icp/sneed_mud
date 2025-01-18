@@ -62,7 +62,7 @@ export const SUPPORTED_TOKENS = {
   SNEED: {
     ledgerCanisterId: "hvgxa-wqaaa-aaaaq-aacia-cai",
     symbol: "SNEED",
-    name: "Sneed Coin",
+    name: "Sneed",
     decimals: 8,
     fee: 1000n // 0.00001 SNEED
   }
@@ -72,13 +72,13 @@ export const SUPPORTED_TOKENS = {
 export function formatTokenAmount(amount, decimals) {
   const amountStr = amount.toString();
   if (amountStr.length <= decimals) {
-    return "0." + "0".repeat(decimals - amountStr.length) + amountStr;
+    return "0." + "0".repeat(decimals - amountStr.length) + amountStr.replace(/0+$/, '');
   }
   const integerPart = amountStr.slice(0, -decimals);
-  const decimalPart = amountStr.slice(-decimals);
+  const decimalPart = amountStr.slice(-decimals).replace(/0+$/, '');
   // Add commas to integer part
   const formattedIntegerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return formattedIntegerPart + "." + decimalPart;
+  return formattedIntegerPart + (decimalPart ? "." + decimalPart : "");
 }
 
 // Parse token amount from string
