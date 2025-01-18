@@ -26,6 +26,8 @@ module {
     var stableItems: [(Types.ItemId, Types.Item)];
     var stablePlayerBaseStats: [(Principal, Types.BaseStats)];
     var stablePlayerDynamicStats: [(Principal, Types.DynamicStats)];
+    var stableRegisteredTokens: Types.StableTokenRegistrations;
+    var stableMetadataCache: [(Principal, Types.TokenMetadata)];
   };
 
   public type MudState = {
@@ -40,6 +42,8 @@ module {
     var realmConfig: Types.RealmConfig;
     playerBaseStats: HashMap.HashMap<Principal, Types.BaseStats>;
     playerDynamicStats: HashMap.HashMap<Principal, Types.DynamicStats>;
+    registeredTokens: HashMap.HashMap<Principal, [Principal]>;
+    metadataCache: HashMap.HashMap<Principal, Types.TokenMetadata>;
   };
 
   public func initStable() : StableState {
@@ -62,6 +66,8 @@ module {
       var stableItems = [] : [(Types.ItemId, Types.Item)];
       var stablePlayerBaseStats = [] : [(Principal, Types.BaseStats)];
       var stablePlayerDynamicStats = [] : [(Principal, Types.DynamicStats)];
+      var stableRegisteredTokens = [] : Types.StableTokenRegistrations;
+      var stableMetadataCache = [] : [(Principal, Types.TokenMetadata)];
     };
     state
   };
@@ -128,6 +134,19 @@ module {
       Principal.hash
     );
 
+    let registeredTokens = HashMap.HashMap<Principal, [Principal]>(10, Principal.equal, Principal.hash);
+    for ((principal, tokens) in stable_state.stableRegisteredTokens.vals()) {
+      let userTokens = Iter.toArray(tokens.vals());
+      registeredTokens.put(principal, userTokens);
+    };
+
+    let metadataCache = HashMap.fromIter<Principal, Types.TokenMetadata>(
+      stable_state.stableMetadataCache.vals(),
+      10,
+      Principal.equal,
+      Principal.hash
+    );
+
     {
       rooms = rooms;
       players = players;
@@ -140,6 +159,8 @@ module {
       var realmConfig = stable_state.stableRealmConfig;
       playerBaseStats = playerBaseStats;
       playerDynamicStats = playerDynamicStats;
+      registeredTokens = registeredTokens;
+      metadataCache = metadataCache;
     }
   };
 
@@ -158,6 +179,12 @@ module {
       stableMessageLogs.add((principal, stableBuffer));
     };
 
+    // Convert registered tokens to stable format
+    let stableRegisteredTokens = Buffer.Buffer<(Principal, [Principal])>(0);
+    for ((principal, tokens) in state.registeredTokens.entries()) {
+      stableRegisteredTokens.add((principal, tokens));
+    };
+
     let stableState : StableState = {
       var nextRoomId = state.stable_state.nextRoomId;
       var nextMessageId = state.stable_state.nextMessageId;
@@ -173,6 +200,8 @@ module {
       var stableItems = Iter.toArray(state.items.entries());
       var stablePlayerBaseStats = Iter.toArray(state.playerBaseStats.entries());
       var stablePlayerDynamicStats = Iter.toArray(state.playerDynamicStats.entries());
+      var stableRegisteredTokens = Buffer.toArray(stableRegisteredTokens);
+      var stableMetadataCache = Iter.toArray(state.metadataCache.entries());
     };
     stableState
   };

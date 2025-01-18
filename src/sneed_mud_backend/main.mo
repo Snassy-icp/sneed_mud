@@ -4,10 +4,19 @@ import Types "./Types";
 import State "./State";
 import Lib "./lib";
 import ItemManager "./ItemManager";
+import TokenManager "./TokenManager";
+import ICRC1 "./ICRC1";
 import Debug "mo:base/Debug";
 import Buffer "mo:base/Buffer";
 import Option "mo:base/Option";
 import ItemUtils "./ItemUtils";
+import Time "mo:base/Time";
+import Error "mo:base/Error";
+import Array "mo:base/Array";
+import Nat8 "mo:base/Nat8";
+import Nat16 "mo:base/Nat16";
+import Nat32 "mo:base/Nat32";
+import Nat64 "mo:base/Nat64";
 
 actor class MudBackend() = this {
   let starting_room : Types.RoomId = 0;
@@ -377,5 +386,124 @@ actor class MudBackend() = this {
       case null { #err("Player not found") };
       case (?principal) { #ok(principal) };
     }
+  };
+
+  // Token management methods
+  public shared(msg) func registerToken(ledgerCanisterId: Principal) : async Result.Result<(), Text> {
+    let token : ICRC1.Token = actor(Principal.toText(ledgerCanisterId));
+    
+    // Fetch metadata and fee
+    try {
+      let metadata = await token.icrc1_metadata();
+      let fee = await token.icrc1_fee();
+      
+      // Extract name, symbol, decimals from metadata
+      var name = "";
+      var symbol = "";
+      var decimals = 8; // Default value
+      
+      for ((key, value) in metadata.vals()) {
+        switch (key) {
+          case "icrc1:name" {
+            switch (value) {
+              case (#Text(val)) { name := val };
+              case _ {};
+            };
+          };
+          case "icrc1:symbol" {
+            switch (value) {
+              case (#Text(val)) { symbol := val };
+              case _ {};
+            };
+          };
+          case "icrc1:decimals" {
+            switch (value) {
+              case (#Nat(val)) { decimals := val };
+              case (#Nat8(val)) { decimals := Nat8.toNat(val) };
+              case (#Nat16(val)) { decimals := Nat16.toNat(val) };
+              case (#Nat32(val)) { decimals := Nat32.toNat(val) };
+              case (#Nat64(val)) { decimals := Nat64.toNat(val) };
+              case _ {};
+            };
+          };
+          case _ {};
+        };
+      };
+      
+      // Create metadata record
+      let tokenMetadata : Types.TokenMetadata = {
+        name = name;
+        symbol = symbol;
+        decimals = decimals;
+        fee = fee;
+        lastRefreshed = Time.now();
+      };
+      
+      // Register token for user
+      TokenManager.registerToken(state, msg.caller, ledgerCanisterId, tokenMetadata)
+    }
+    catch (e) {
+      #err("Failed to fetch token metadata: " # Error.message(e))
+    }
+  };
+
+  public shared(msg) func unregisterToken(ledgerCanisterId: Principal) : async Result.Result<(), Text> {
+    TokenManager.unregisterToken(state, msg.caller, ledgerCanisterId)
+  };
+
+  public query(msg) func getRegisteredTokens() : async [Types.TokenInfo] {
+    TokenManager.getRegisteredTokens(state, msg.caller)
+  };
+
+  public shared(msg) func refreshTokenMetadata() : async Result.Result<(), Text> {
+    let staleTokens = TokenManager.getRegisteredTokens(state, msg.caller);
+    let staleIds = Array.mapFilter<Types.TokenInfo, Principal>(staleTokens, func(t) {
+        if (t.needsRefresh) { ?t.ledgerCanisterId } else { null }
+    });
+    
+    if (staleIds.size() == 0) {
+        return #ok(());
+    };
+    
+    // Refresh metadata for stale tokens
+    for (tokenId in staleIds.vals()) {
+        try {
+            let token = actor (Principal.toText(tokenId)) : ICRC1.Token;
+            let metadata = await token.icrc1_metadata();
+            let fee = await token.icrc1_fee();
+            
+            let tokenMetadata : Types.TokenMetadata = {
+                name = "";  // Will be populated from metadata
+                symbol = "";  // Will be populated from metadata
+                decimals = 8;  // Default, will be overridden
+                fee = fee;
+                lastRefreshed = Time.now()
+            };
+            
+            // Extract name, symbol, decimals from metadata
+            var updatedMetadata = tokenMetadata;
+            for (entry in metadata.vals()) {
+                let key = entry.0;
+                let value = entry.1;
+                updatedMetadata := switch (key, value) {
+                    case ("icrc1:name", #Text(name)) { { updatedMetadata with name = name } };
+                    case ("icrc1:symbol", #Text(symbol)) { { updatedMetadata with symbol = symbol } };
+                    case ("icrc1:decimals", #Nat(dec)) { { updatedMetadata with decimals = dec } };
+                    case ("icrc1:decimals", #Nat8(dec)) { { updatedMetadata with decimals = Nat8.toNat(dec) } };
+                    case ("icrc1:decimals", #Nat16(dec)) { { updatedMetadata with decimals = Nat16.toNat(dec) } };
+                    case ("icrc1:decimals", #Nat32(dec)) { { updatedMetadata with decimals = Nat32.toNat(dec) } };
+                    case ("icrc1:decimals", #Nat64(dec)) { { updatedMetadata with decimals = Nat64.toNat(dec) } };
+                    case _ { updatedMetadata };
+                };
+            };
+            
+            ignore TokenManager.updateTokenMetadata(state, msg.caller, tokenId, updatedMetadata);
+        } catch (e) {
+            // Log error but continue with other tokens
+            Debug.print("Error refreshing metadata for token: " # Principal.toText(tokenId) # " - " # Error.message(e));
+        };
+    };
+    
+    #ok(())
   };
 }

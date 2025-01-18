@@ -1144,6 +1144,89 @@ Help:
         return;
       }
 
+      // Add new command handlers for token management
+      if (command.startsWith('/wallet register')) {
+        const matches = command.match(/^\/wallet register ([a-z0-9-]+)$/);
+        if (!matches) {
+          setMessages(prev => [...prev, 'Usage: /wallet register <canister_id>']);
+          return;
+        }
+
+        const canisterId = matches[1];
+        try {
+          const result = await authenticatedActor.registerToken(Principal.fromText(canisterId));
+          if ('err' in result) {
+            setMessages(prev => [...prev, `Error registering token: ${result.err}`]);
+          } else {
+            setMessages(prev => [...prev, `Successfully registered token ledger ${canisterId}`]);
+          }
+        } catch (e) {
+          setMessages(prev => [...prev, `Error registering token: ${e.message}`]);
+        }
+        return;
+      }
+
+      if (command.startsWith('/wallet unregister')) {
+        const matches = command.match(/^\/wallet unregister ([a-z0-9-]+)$/);
+        if (!matches) {
+          setMessages(prev => [...prev, 'Usage: /wallet unregister <canister_id>']);
+          return;
+        }
+
+        const canisterId = matches[1];
+        try {
+          const result = await authenticatedActor.unregisterToken(Principal.fromText(canisterId));
+          if ('err' in result) {
+            setMessages(prev => [...prev, `Error unregistering token: ${result.err}`]);
+          } else {
+            setMessages(prev => [...prev, `Successfully unregistered token ledger ${canisterId}`]);
+          }
+        } catch (e) {
+          setMessages(prev => [...prev, `Error unregistering token: ${e.message}`]);
+        }
+        return;
+      }
+
+      if (command === '/wallet tokens') {
+        try {
+          const tokens = await authenticatedActor.getRegisteredTokens();
+          if (tokens.length === 0) {
+            setMessages(prev => [...prev, 'No registered tokens found']);
+          } else {
+            setMessages(prev => [...prev, 'Registered tokens:']);
+            for (const token of tokens) {
+              const { metadata, ledgerCanisterId } = token;
+              const staleWarning = await authenticatedActor.hasStaleMetadata() ? ' (metadata needs refresh)' : '';
+              setMessages(prev => [...prev, `${metadata.name} (${metadata.symbol}) - ${ledgerCanisterId.toText()}${staleWarning}`]);
+            }
+          }
+        } catch (e) {
+          setMessages(prev => [...prev, `Error listing tokens: ${e.message}`]);
+        }
+        return;
+      }
+
+      if (command.startsWith('/wallet refresh')) {
+        const matches = command.match(/^\/wallet refresh ([a-z0-9-]+)$/);
+        if (!matches) {
+          setMessages(prev => [...prev, 'Usage: /wallet refresh <canister_id>']);
+          return;
+        }
+
+        const canisterId = matches[1];
+        try {
+          const result = await authenticatedActor.refreshTokenMetadata(Principal.fromText(canisterId));
+          if ('err' in result) {
+            setMessages(prev => [...prev, `Error refreshing token metadata: ${result.err}`]);
+          } else {
+            setMessages(prev => [...prev, `Successfully refreshed metadata for token ledger ${canisterId}`]);
+          }
+        } catch (e) {
+          setMessages(prev => [...prev, `Error refreshing token metadata: ${e.message}`]);
+        }
+        return;
+      }
+
       // If no command matched, show error
       setMessages(prev => [...prev, "Unknown command. Type /help for available commands."]);
     } catch (error) {

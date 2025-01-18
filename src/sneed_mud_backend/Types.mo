@@ -11,7 +11,7 @@ module {
 
   public type Account = {
     owner: Principal;
-    subaccount: ?Subaccount;
+    subaccount: ?Blob;
   };
 
   public type Exit = {
@@ -41,7 +41,7 @@ module {
     var start: Nat;
     var size: Nat;
     var capacity: Nat;
-    var highestId: ?MessageId;
+    var highestId: MessageId;
   };
 
   // Stable version of circular buffer for upgrades
@@ -50,7 +50,7 @@ module {
     start: Nat;
     size: Nat;
     capacity: Nat;
-    highestId: ?MessageId;
+    highestId: MessageId;
   };
 
   // Realm configuration as an immutable record
@@ -121,4 +121,22 @@ module {
     base: BaseStats;
     dynamic: DynamicStats;
   };
+
+  // Token metadata types
+  public type TokenMetadata = {
+    name: Text;
+    symbol: Text;
+    decimals: Nat;
+    fee: Nat;
+    lastRefreshed: Int;
+  };
+
+  public type TokenInfo = {
+    ledgerCanisterId: Principal;
+    metadata: ?TokenMetadata;  // None if stale or not in cache
+    needsRefresh: Bool;
+  };
+
+  // Stable state for token registrations
+  public type StableTokenRegistrations = [(Principal, [Principal])];  // user -> [ledger canister IDs]
 } 

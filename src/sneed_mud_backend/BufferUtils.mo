@@ -12,7 +12,7 @@ module {
       var start = 0;
       var size = 0;
       var capacity = 100;
-      var highestId = null;
+      var highestId = 0;
     }
   };
 
@@ -35,7 +35,7 @@ module {
     };
 
     // Update highestId
-    cb.highestId := ?msg.id;
+    cb.highestId := msg.id;
   };
 
   public func getFromCircularBuffer(cb: CircularBuffer, start: Nat, count: Nat) : [LogMessage] {
@@ -53,8 +53,8 @@ module {
 
   public func getLastNFromCircularBuffer(cb: CircularBuffer, n: Nat) : [LogMessage] {
     let count = if (n > cb.size) { cb.size } else { n };
-    let start = cb.size - count;
-    getFromCircularBuffer(cb, start, count)
+    let startIndex = if (cb.size > count) { cb.size - count } else { 0 };
+    getFromCircularBuffer(cb, startIndex, count)
   };
 
   public func createCircularBufferFromStable(stableBuffer: Types.StableCircularBuffer) : Types.CircularBuffer {

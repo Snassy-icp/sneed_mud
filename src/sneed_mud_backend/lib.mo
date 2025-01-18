@@ -88,14 +88,14 @@ module {
         //Debug.print("Found message log with size: " # Nat.toText(cb.size));
         
         // Short circuit if we know there are no newer messages
-        switch (afterId, cb.highestId) {
-          case (?requestedId, ?maxId) {
-            if (requestedId >= maxId) {
+        switch (afterId) {
+          case (?requestedId) {
+            if (requestedId >= cb.highestId) {
               //Debug.print("No new messages after ID: " # Nat.toText(requestedId));
               return [];
             };
           };
-          case (_, _) {};
+          case null {};
         };
 
         switch (afterId) {
