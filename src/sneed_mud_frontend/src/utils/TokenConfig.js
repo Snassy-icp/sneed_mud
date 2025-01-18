@@ -71,20 +71,40 @@ export const SUPPORTED_TOKENS = {
 // Format token amount for display
 export function formatTokenAmount(amount, decimals) {
   try {
-    // Handle both string and BigInt inputs
-    const bigIntAmount = typeof amount === 'bigint' ? amount : BigInt(amount.toString());
-    const amountStr = bigIntAmount.toString();
+    // Log input values for debugging
+    console.log("formatTokenAmount input:", { amount, decimals, typeAmount: typeof amount });
     
-    if (amountStr.length <= decimals) {
-      return "0." + "0".repeat(decimals - amountStr.length) + amountStr.replace(/0+$/, '');
+    // Convert amount to BigInt more carefully
+    let bigIntAmount;
+    if (typeof amount === 'bigint') {
+      bigIntAmount = amount;
+    } else if (typeof amount === 'number') {
+      bigIntAmount = BigInt(Math.floor(amount));
+    } else if (typeof amount === 'string') {
+      bigIntAmount = BigInt(amount.replace(/[^\d]/g, ''));
+    } else if (amount && typeof amount === 'object' && amount.toString) {
+      bigIntAmount = BigInt(amount.toString().replace(/[^\d]/g, ''));
+    } else {
+      throw new Error(`Invalid amount type: ${typeof amount}`);
     }
-    const integerPart = amountStr.slice(0, -decimals);
-    const decimalPart = amountStr.slice(-decimals).replace(/0+$/, '');
+    
+    const amountStr = bigIntAmount.toString();
+    console.log("Converted amount:", { bigIntAmount, amountStr });
+    
+    // Ensure decimals is a number
+    const decimalPlaces = Number(decimals);
+    if (amountStr.length <= decimalPlaces) {
+      const zeros = "0".repeat(decimalPlaces - amountStr.length);
+      const decimal = amountStr.replace(/0+$/, '');
+      return `0.${zeros}${decimal}`;
+    }
+    const integerPart = amountStr.slice(0, -decimalPlaces);
+    const decimalPart = amountStr.slice(-decimalPlaces).replace(/0+$/, '');
     // Add commas to integer part
     const formattedIntegerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    return formattedIntegerPart + (decimalPart ? "." + decimalPart : "");
+    return decimalPart ? `${formattedIntegerPart}.${decimalPart}` : formattedIntegerPart;
   } catch (error) {
-    console.error("Error formatting token amount:", error);
+    console.error("Error formatting token amount:", error, "Input:", { amount, decimals });
     return "Error";
   }
 }

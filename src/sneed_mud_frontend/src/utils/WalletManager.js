@@ -123,17 +123,22 @@ export async function getAllBalances(principal, hideZeroBalances, agent, authent
           agent,
           metadata.decimals
         );
+        console.log("Raw balance for", metadata.symbol, ":", balance, typeof balance);
 
-        if (!hideZeroBalances || BigInt(balance) > 0n) {
+        const bigIntBalance = BigInt(balance.toString());
+        console.log("Converted balance:", bigIntBalance, typeof bigIntBalance);
+
+        if (!hideZeroBalances || bigIntBalance > 0n) {
           balances.push({
             symbol: metadata.symbol || "Unknown",
             name: metadata.name || "Unknown Token",
-            balance: BigInt(balance),
-            formatted: formatTokenAmount(BigInt(balance), metadata.decimals),
+            balance: bigIntBalance,
+            formatted: formatTokenAmount(bigIntBalance, metadata.decimals),
             canisterId
           });
         }
       } catch (error) {
+        console.error("Error processing balance for", metadata.symbol, ":", error);
         balances.push({
           symbol: metadata.symbol || "Unknown",
           name: metadata.name || "Unknown Token",
