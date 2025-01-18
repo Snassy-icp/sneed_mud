@@ -1020,11 +1020,10 @@ Help:
       if (command === '/create') {
         try {
           const result = await authenticatedActor.createCharacter();
-          if ('ok' in result) {
-            setMessages(prev => [...prev, "Character created! Use /stats to view your stats."]);
-          } else {
+          if ('err' in result) {
             setMessages(prev => [...prev, `Error: ${result.err}`]);
           }
+          // Success message comes from backend via message polling
         } catch (error) {
           console.error("Error creating character:", error);
           setMessages(prev => [...prev, `Error: ${error.message}`]);
