@@ -140,7 +140,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  height: calc(100vh - 200px);
+  min-height: calc(100vh - 200px);
+  padding-bottom: 2rem;
+  position: relative;
 
   .current-room {
     background-color: #1a1a1a;
@@ -188,13 +190,14 @@ button {
   color: #0f0;
   font-family: 'Courier New', monospace;
   padding: 1rem;
-  height: 400px;
+  flex: 1;
   overflow-y: auto;
   margin-bottom: 1rem;
   border: 1px solid #0f0;
   min-height: 200px;
   width: 100%;
   display: block;
+  max-height: calc(100vh - 400px);
 
   .log-message {
     margin-bottom: 0.5rem;
@@ -207,6 +210,12 @@ button {
 }
 
 .room-interface {
+  position: sticky;
+  bottom: 0;
+  background-color: #242424;
+  padding: 1rem 0;
+  width: 100%;
+  
   .available-exits {
     display: flex;
     flex-wrap: wrap;
@@ -248,7 +257,7 @@ button {
       padding: 0.5rem 1rem;
       cursor: pointer;
       font-family: 'Courier New', monospace;
-
+      
       &:hover {
         background-color: #0f0;
         color: #000;

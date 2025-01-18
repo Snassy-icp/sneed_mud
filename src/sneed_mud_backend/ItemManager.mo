@@ -46,29 +46,61 @@ module {
                   case null { false };
                 };
 
-                // Get source player name (if from a player)
+                // Check if target is a room
+                let isToRoom = switch (event.to) {
+                  case (?toAccount) {
+                    switch (toAccount.subaccount) {
+                      case (?subaccount) {
+                        let ownerBytes = Blob.toArray(subaccount);
+                        ownerBytes.size() > 1 and ownerBytes[1] == 1; // Type 1 is room ownership
+                      };
+                      case null { false };
+                    };
+                  };
+                  case null { false };
+                };
+
+                // Check if target is a container
+                let isToContainer = switch (event.to) {
+                  case (?toAccount) {
+                    switch (toAccount.subaccount) {
+                      case (?subaccount) {
+                        let ownerBytes = Blob.toArray(subaccount);
+                        ownerBytes.size() > 1 and ownerBytes[1] == 2; // Type 2 is container ownership
+                      };
+                      case null { false };
+                    };
+                  };
+                  case null { false };
+                };
+
+                // Get player names for messaging
                 let sourcePlayerName = switch (event.from) {
                   case (?fromAccount) {
-                    if (not isFromRoom) {
-                      switch (state.players.get(fromAccount.owner)) {
-                        case (?name) { ?name };
-                        case null { null };
+                    switch (fromAccount.subaccount) {
+                      case null {
+                        switch (state.players.get(fromAccount.owner)) {
+                          case (?name) { ?name };
+                          case null { null };
+                        };
                       };
-                    } else { null };
+                      case _ { null };
+                    };
                   };
                   case null { null };
                 };
 
-                // Get target player name (if to a player)
                 let targetPlayerName = switch (event.to) {
                   case (?toAccount) {
-                    if (Option.isNull(toAccount.subaccount)) {
-                      // To player inventory
-                      switch (state.players.get(toAccount.owner)) {
-                        case (?name) { ?name };
-                        case null { null };
+                    switch (toAccount.subaccount) {
+                      case null {
+                        switch (state.players.get(toAccount.owner)) {
+                          case (?name) { ?name };
+                          case null { null };
+                        };
                       };
-                    } else { null }; // To container or room
+                      case _ { null };
+                    };
                   };
                   case null { null };
                 };
@@ -100,9 +132,9 @@ module {
                 };
 
                 // Handle different transfer scenarios
-                switch (sourcePlayerName, targetPlayerName, isFromRoom) {
-                  case (?fromName, ?toName, false) {
-                    // Player to player (give)
+                switch (sourcePlayerName, targetPlayerName, isFromRoom, isToRoom, isToContainer) {
+                  case (?fromName, ?toName, false, false, false) {
+                    // Player to player (give) - public action
                     switch (event.from, event.to) {
                       case (?from, ?to) {
                         // Message to giver
@@ -121,8 +153,8 @@ module {
                       case _ {};
                     };
                   };
-                  case (?fromName, null, false) {
-                    // Player to room/container (drop)
+                  case (?fromName, null, false, true, false) {
+                    // Player to room (drop) - public action
                     switch (event.from) {
                       case (?from) {
                         // Message to dropper
@@ -139,8 +171,8 @@ module {
                       case null {};
                     };
                   };
-                  case (_, ?toName, true) {
-                    // Room to player (pick/take)
+                  case (_, ?toName, true, false, false) {
+                    // Room to player (pick/take) - public action
                     switch (event.to) {
                       case (?to) {
                         // Message to taker
@@ -157,10 +189,30 @@ module {
                       case null {};
                     };
                   };
-                  case (null, null, _) {
-                    // Container to container, no messages needed
+                  case (?fromName, null, false, false, true) {
+                    // Player to container - private action
+                    switch (event.from, event.to) {
+                      case (?from, ?to) {
+                        // Message only to the player performing the action
+                        Lib.addMessageToLog(state, from.owner, "You put " # itemType.name # " into the container");
+                      };
+                      case _ {};
+                    };
                   };
-                  case (_, _, _) {
+                  case (null, ?toName, false, false, true) {
+                    // Container to player - private action
+                    switch (event.to) {
+                      case (?to) {
+                        // Message only to the player performing the action
+                        Lib.addMessageToLog(state, to.owner, "You take " # itemType.name # " from the container");
+                      };
+                      case _ {};
+                    };
+                  };
+                  case (null, null, _, _, _) {
+                    // Container to container or other system transfers - no messages needed
+                  };
+                  case _ {
                     // Other cases (shouldn't happen), no messages needed
                   };
                 };

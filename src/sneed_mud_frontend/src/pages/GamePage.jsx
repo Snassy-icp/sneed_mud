@@ -91,36 +91,76 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
   async function findMatchingItem(partialName, inventoryOnly = false) {
     try {
+      // First check inventory
       const inventoryResult = await authenticatedActor.getItems();
       if ('ok' in inventoryResult) {
         const items = inventoryResult.ok;
         const normalizedSearch = partialName.toLowerCase().trim();
         
-        for (const item of items) {
-          const itemTypeName = item.item_type.name.toLowerCase();
-          if (itemTypeName.startsWith(normalizedSearch)) {
-            return { id: BigInt(item.id), name: item.item_type.name };
+        // Helper function to recursively search containers
+        async function searchContainer(containerItems) {
+          let matches = [];
+          
+          // Check each item in this container
+          for (const item of containerItems) {
+            const itemTypeName = item.item_type.name.toLowerCase();
+            if (itemTypeName.startsWith(normalizedSearch)) {
+              matches.push({ id: BigInt(item.id), name: item.item_type.name });
+            }
+            
+            // If this is an open container, search its contents
+            if (item.item_type.is_container && item.is_open) {
+              const contentsResult = await authenticatedActor.getContainerContents(BigInt(item.id));
+              if ('ok' in contentsResult) {
+                const contents = contentsResult.ok;
+                // Get details for each item in the container
+                for (const itemId of contents) {
+                  const itemResult = await authenticatedActor.getItem(BigInt(itemId));
+                  if ('ok' in itemResult) {
+                    const nestedMatches = await searchContainer([itemResult.ok]);
+                    matches = matches.concat(nestedMatches);
+                  }
+                }
+              }
+            }
           }
+          return matches;
+        }
+
+        // Start the recursive search from inventory items
+        const matches = await searchContainer(items);
+
+        // If we have any matches, return the first one
+        if (matches.length > 0) {
+          return matches[0];
         }
       }
 
+      // If not found in inventory and we're not restricted to inventory, check room
       if (!inventoryOnly && currentRoom) {
         const roomItemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
         if ('ok' in roomItemsResult) {
           const items = roomItemsResult.ok;
           const normalizedSearch = partialName.toLowerCase().trim();
           
+          // Filter items whose names start with the partial name
           const matches = items.filter(item => {
             const itemTypeName = item.item_type.name.toLowerCase();
             return itemTypeName.startsWith(normalizedSearch);
           });
 
+          // Return the first match if any are found
           if (matches.length > 0) {
             return { id: BigInt(matches[0].id), name: matches[0].item_type.name };
           }
         }
       }
 
+      // Try parsing as ID if no name matches
+      const id = parseInt(partialName);
+      if (!isNaN(id)) {
+        return { id: BigInt(id), name: await getItemTypeName(id) };
+      }
       throw new Error(`No item found matching '${partialName}'`);
     } catch (error) {
       throw error;
@@ -177,21 +217,87 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     }
   }
 
+  // Helper function to recursively get container contents
+  async function getContainerContentsRecursive(containerId, depth = 0) {
+    if (depth > 5) return []; // Prevent infinite recursion, limit depth to 5 levels
+    
+    console.log("Getting contents for container:", containerId);
+    const contentsResult = await authenticatedActor.getContainerContents(BigInt(containerId));
+    console.log("Raw contents result:", contentsResult);
+    
+    if (!('ok' in contentsResult)) {
+      console.log("Error getting container contents:", contentsResult);
+      return [];
+    }
+    
+    const contents = contentsResult.ok;
+    console.log("Raw contents array:", contents);
+    const messages = [];
+    
+    if (contents.length > 0) {
+      // Group contents by type
+      const groupedContents = new Map();
+      for (const itemId of contents) {
+        console.log("Getting item details for:", itemId);
+        const itemResult = await authenticatedActor.getItem(BigInt(itemId));
+        console.log("Item result:", itemResult);
+        if ('ok' in itemResult) {
+          const containerItem = itemResult.ok;
+          console.log("Container item:", containerItem);
+          const key = containerItem.item_type.name;
+          const count = groupedContents.get(key)?.count || 0n;  // Initialize as BigInt
+          groupedContents.set(key, {
+            id: containerItem.id,
+            count: count + BigInt(containerItem.count),  // Convert and add as BigInt
+            isContainer: containerItem.item_type.is_container,
+            isOpen: containerItem.is_open,
+            type: containerItem.item_type
+          });
+        }
+      }
+      
+      // Display grouped contents
+      for (const [name, info] of groupedContents) {
+        const countStr = info.count > 1n ? ` (x${info.count})` : '';  // Compare with BigInt
+        const containerStatus = info.isContainer ? 
+          ` [${info.isOpen ? 'open' : 'closed'}]` : 
+          '';
+        const indent = '  '.repeat(depth + 1);
+        messages.push(`${indent}${name}${countStr}${containerStatus}`);
+        
+        // Recursively get contents of nested containers
+        if (info.isContainer && info.isOpen) {
+          const nestedContents = await getContainerContentsRecursive(info.id, depth + 1);
+          if (nestedContents.length > 0) {
+            messages.push(...nestedContents);
+          } else if (depth < 5) { // Only show "empty" message if we haven't hit depth limit
+            messages.push(`${indent}  (empty)`);
+          }
+        }
+      }
+    } else {
+      const indent = '  '.repeat(depth + 1);
+      messages.push(`${indent}(empty)`);
+    }
+    
+    return messages;
+  }
+
   useEffect(() => {
-    if (authenticatedActor && playerName) {
+    if (isAuthenticated && authenticatedActor && playerName) {
       updateCurrentRoom();
       fetchMessages();
       const roomInterval = setInterval(updateCurrentRoom, 5000);
       return () => clearInterval(roomInterval);
     }
-  }, [authenticatedActor, playerName]);
+  }, [isAuthenticated, authenticatedActor, playerName]);
 
   useEffect(() => {
-    if (authenticatedActor && playerName) {
+    if (isAuthenticated && authenticatedActor && playerName) {
       const messageInterval = setInterval(fetchMessages, 1000);
       return () => clearInterval(messageInterval);
     }
-  }, [authenticatedActor, playerName, lastMessageId]);
+  }, [isAuthenticated, authenticatedActor, playerName, lastMessageId]);
 
   async function handleCommand(command) {
     try {
@@ -595,30 +701,36 @@ Help:
       // Handle put command (/put)
       if (command.toLowerCase().startsWith('/put ')) {
         const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        console.log("Put command args:", argsString);
         
         try {
           // Match format: item in|into container [count]
           const matches = argsString.match(/^(.+?)\s+(?:in|into)\s+(.+?)(?:\s+(\d+))?$/);
+          console.log("Regex matches:", matches);
           if (!matches) {
             setMessages(prev => [...prev, "Error: Put command format is '/put <item> in <container>' or '/put <item> in <container> <count>'"]);
             return;
           }
           
           const [_, itemStr, containerStr, countStr] = matches;
+          console.log("Parsed values:", { itemStr, containerStr, countStr });
           const count = countStr ? parseInt(countStr) : 1;
           
           try {
             // Find matching item (inventory only)
             const item = await findMatchingItem(itemStr, true);
+            console.log("Found item:", item);
             
             // Find matching container
             const container = await findMatchingItem(containerStr);
+            console.log("Found container:", container);
             
             // Create target account (container's account)
             const targetAccount = {
               owner: await authenticatedActor.getCanisterPrincipal(),
               subaccount: [createItemSubaccount(container.id)]
             };
+            console.log("Target account:", targetAccount);
 
             // Transfer item to container
             const result = await authenticatedActor.transferItem(
@@ -626,11 +738,11 @@ Help:
               targetAccount,
               count === item.count ? [] : [count]
             );
+            console.log("Transfer result:", result);
             
             if ('err' in result) {
               setMessages(prev => [...prev, `Error: ${result.err}`]);
             }
-            // Success message comes from backend via message polling
           } catch (error) {
             console.error("Error putting item in container:", error);
             setMessages(prev => [...prev, `Error: ${error.message}`]);
