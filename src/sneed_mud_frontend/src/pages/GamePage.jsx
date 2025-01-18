@@ -386,13 +386,13 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
       // Handle send command
       if (command.startsWith('/send ')) {
-        const match = command.match(/^\/send (\d+\.?\d*) (\w+)( to (.+))?$/);
+        const match = command.match(/^\/send (\d+\.?\d*) (\w+) to (.+)$/);
         if (!match) {
-          setMessages(prev => [...prev, "Invalid send command. Format: /send <amount> <token> [to <recipient>]"]);
+          setMessages(prev => [...prev, "Invalid send command. Format: /send <amount> <token> to <recipient>"]);
           return;
         }
 
-        const [, amountStr, tokenSymbol, , recipient = "Sneedy"] = match;
+        const [, amountStr, tokenSymbol, recipient] = match;
         const config = SUPPORTED_TOKENS[tokenSymbol];
         if (!config) {
           setMessages(prev => [...prev, `Unsupported token: ${tokenSymbol}`]);
@@ -401,7 +401,7 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
         try {
           const amount = parseTokenAmount(amountStr, config.decimals);
-          const targetPrincipal = recipient === "Sneedy" ? "2jotg-jptnv-ddvwa-q3ijs-qkd4u-tkycr-eslc7-ekkny-slpb7-t4hwj-mqe" : recipient;
+          const targetPrincipal = recipient;
 
           setMessages(prev => [...prev, 
             `Are you sure you want to send ${amountStr} ${tokenSymbol} to ${recipient} (principal: ${targetPrincipal})?`,
@@ -458,13 +458,16 @@ Items:
 Containers:
   /open <container> - Open a container
   /close <container> - Close a container
-  /put <item> in|into <container> - Put an item into a container
+  /put <item> in|into <container> [count] - Put an item into a container
+
+Character:
+  /stats - Show your character's stats (Level, HP, MP, XP)
 
 Wallet:
   /wallet - Show your wallet balances and principal
   /wallet hide_zero - Hide zero balances in wallet display
   /wallet show_zero - Show all balances in wallet display
-  /send <amount> <token> to <player/principal> - Send tokens to a player or principal
+  /send <amount> <token> to <recipient> - Send tokens to a player or principal
 
 Admin Commands (Realm Owners only):
   /create_room "Room Name", "Room Description" - Create a new room
