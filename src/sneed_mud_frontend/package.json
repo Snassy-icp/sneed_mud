@@ -4,28 +4,33 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "setup": "npm i && dfx canister create sneed_mud_backend && dfx generate sneed_mud_backend && dfx deploy",
-    "start": "vite --port 3000",
-    "prebuild": "dfx generate sneed_mud_backend",
-    "build": "tsc && vite build",
-    "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\""
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "deploy": "npm run build && cd ../.. && dfx deploy --network ic",
+    "deploy:local": "npm run build && cd ../.. && dfx deploy"
   },
   "dependencies": {
-    "@dfinity/agent": "^2.1.3",
-    "@dfinity/candid": "^2.1.3",
-    "@dfinity/principal": "^2.1.3",
+    "@dfinity/agent": "^2.2.0",
+    "@dfinity/auth-client": "^2.2.0",
+    "@dfinity/candid": "^2.2.0",
+    "@dfinity/principal": "^2.2.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.3"
   },
   "devDependencies": {
-    "@types/node": "^22.10.7",
-    "@types/react": "^18.2.14",
-    "@types/react-dom": "^18.2.6",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
     "dotenv": "^16.4.7",
-    "sass": "^1.63.6",
-    "typescript": "^5.1.3",
-    "vite": "^4.5.5",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "sass": "^1.71.1",
+    "vite": "^5.0.8",
     "vite-plugin-environment": "^1.1.3"
   }
 }
