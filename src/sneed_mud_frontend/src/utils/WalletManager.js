@@ -46,8 +46,8 @@ export async function getAllBalances(principal, hideZeroBalances, agent, authent
         balances.push({
           symbol,
           name: config.name,
-          balance,
-          formatted: formatTokenAmount(balance, config.decimals),
+          balance: BigInt(balance),
+          formatted: formatTokenAmount(BigInt(balance), config.decimals),
           canisterId: config.ledgerCanisterId
         });
       }
@@ -102,7 +102,19 @@ export async function getAllBalances(principal, hideZeroBalances, agent, authent
       }
 
       const canisterId = token.ledgerCanisterId.toText();
-      const metadata = token.metadata[0]; // Access first metadata entry
+      // Access first element of metadata array
+      if (!token.metadata || !Array.isArray(token.metadata) || token.metadata.length === 0) {
+        balances.push({
+          symbol: "Unknown",
+          name: "Unknown Token",
+          balance: 0n,
+          formatted: "Error",
+          error: "Missing metadata",
+          canisterId
+        });
+        continue;
+      }
+      const metadata = token.metadata[0];
 
       try {
         const balance = await getTokenBalanceByCanisterId(
@@ -112,19 +124,19 @@ export async function getAllBalances(principal, hideZeroBalances, agent, authent
           metadata.decimals
         );
 
-        if (!hideZeroBalances || balance > 0n) {
+        if (!hideZeroBalances || BigInt(balance) > 0n) {
           balances.push({
-            symbol: metadata.symbol,
-            name: metadata.name,
-            balance,
-            formatted: formatTokenAmount(balance, metadata.decimals),
+            symbol: metadata.symbol || "Unknown",
+            name: metadata.name || "Unknown Token",
+            balance: BigInt(balance),
+            formatted: formatTokenAmount(BigInt(balance), metadata.decimals),
             canisterId
           });
         }
       } catch (error) {
         balances.push({
-          symbol: metadata.symbol,
-          name: metadata.name,
+          symbol: metadata.symbol || "Unknown",
+          name: metadata.name || "Unknown Token",
           balance: 0n,
           formatted: "Error",
           error: error.message,
@@ -185,10 +197,19 @@ export async function transferTokens(tokenSymbol, fromPrincipal, toPrincipal, am
       throw new Error('Invalid response from getRegisteredTokens: ok field is not an array');
     }
 
-    const token = registeredTokens.find(t => t.metadata[0].symbol === tokenSymbol);
+    const token = registeredTokens.find(t => {
+      if (!t.metadata || !Array.isArray(t.metadata) || t.metadata.length === 0) {
+        return false;
+      }
+      return t.metadata[0].symbol === tokenSymbol;
+    });
 
     if (!token) {
       throw new Error(`Unknown token: ${tokenSymbol}. Make sure it's registered correctly.`);
+    }
+
+    if (!token.metadata || !Array.isArray(token.metadata) || token.metadata.length === 0) {
+      throw new Error(`Missing metadata for token: ${tokenSymbol}`);
     }
 
     canisterId = token.ledgerCanisterId.toText();

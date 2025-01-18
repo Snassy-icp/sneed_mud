@@ -70,15 +70,23 @@ export const SUPPORTED_TOKENS = {
 
 // Format token amount for display
 export function formatTokenAmount(amount, decimals) {
-  const amountStr = amount.toString();
-  if (amountStr.length <= decimals) {
-    return "0." + "0".repeat(decimals - amountStr.length) + amountStr.replace(/0+$/, '');
+  try {
+    // Handle both string and BigInt inputs
+    const bigIntAmount = typeof amount === 'bigint' ? amount : BigInt(amount.toString());
+    const amountStr = bigIntAmount.toString();
+    
+    if (amountStr.length <= decimals) {
+      return "0." + "0".repeat(decimals - amountStr.length) + amountStr.replace(/0+$/, '');
+    }
+    const integerPart = amountStr.slice(0, -decimals);
+    const decimalPart = amountStr.slice(-decimals).replace(/0+$/, '');
+    // Add commas to integer part
+    const formattedIntegerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return formattedIntegerPart + (decimalPart ? "." + decimalPart : "");
+  } catch (error) {
+    console.error("Error formatting token amount:", error);
+    return "Error";
   }
-  const integerPart = amountStr.slice(0, -decimals);
-  const decimalPart = amountStr.slice(-decimals).replace(/0+$/, '');
-  // Add commas to integer part
-  const formattedIntegerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return formattedIntegerPart + (decimalPart ? "." + decimalPart : "");
 }
 
 // Parse token amount from string
