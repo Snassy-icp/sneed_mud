@@ -568,6 +568,7 @@ Containers:
 
 Character:
   /stats - Show your character's stats (Level, HP, MP, XP)
+  /create - Create character stats if you don't have them
 
 Wallet:
   /wallet - Show your wallet balances and principal
@@ -1013,6 +1014,22 @@ Help:
         } else {
           throw new Error(result.err);
         }
+      }
+
+      // Handle create character command
+      if (command === '/create') {
+        try {
+          const result = await authenticatedActor.createCharacter();
+          if ('ok' in result) {
+            setMessages(prev => [...prev, "Character created! Use /stats to view your stats."]);
+          } else {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error creating character:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
       }
 
       // Handle create_room command

@@ -383,8 +383,24 @@ module {
             state.players.put(caller, name);
             state.usedNames.put(name, caller);
             
+            // Create character stats for the new player
+            let baseStats : Types.BaseStats = {
+              level = 1;
+              maxHp = 100;
+              maxMp = 100;
+            };
+            
+            let dynamicStats : Types.DynamicStats = {
+              hp = 100;
+              mp = 100;
+              xp = 0;
+            };
+
+            state.playerBaseStats.put(caller, baseStats);
+            state.playerDynamicStats.put(caller, dynamicStats);
+            
             // Add welcome message to player's log
-            addMessageToLog(state, caller, "Welcome to the game, " # name # "!");
+            addMessageToLog(state, caller, "Welcome to the game, " # name # "! Your character has been created with starting stats.");
             
             // Place player in starting room (room 0) if it exists
             switch (state.rooms.get(starting_room)) {
@@ -699,26 +715,32 @@ module {
     switch (state.playerBaseStats.get(caller)) {
       case (?_) { #err("Character already exists") };
       case null {
-        // Initialize base stats
-        let baseStats : Types.BaseStats = {
-          level = 1;
-          maxHp = 100;
-          maxMp = 100;
-        };
-        
-        // Initialize dynamic stats
-        let dynamicStats : Types.DynamicStats = {
-          hp = 100;
-          mp = 100;
-          xp = 0;
-        };
+        // Check if player is registered
+        switch (state.players.get(caller)) {
+          case null { #err("You need to register a name first using /register <name>") };
+          case (?playerName) {
+            // Initialize base stats
+            let baseStats : Types.BaseStats = {
+              level = 1;
+              maxHp = 100;
+              maxMp = 100;
+            };
+            
+            // Initialize dynamic stats
+            let dynamicStats : Types.DynamicStats = {
+              hp = 100;
+              mp = 100;
+              xp = 0;
+            };
 
-        state.playerBaseStats.put(caller, baseStats);
-        state.playerDynamicStats.put(caller, dynamicStats);
+            state.playerBaseStats.put(caller, baseStats);
+            state.playerDynamicStats.put(caller, dynamicStats);
 
-        // Notify the player
-        addMessageToLog(state, caller, "Character created! Use /stats to view your stats.");
-        #ok(())
+            // Notify the player
+            addMessageToLog(state, caller, "Character created! Use /stats to view your stats.");
+            #ok(())
+          };
+        }
       };
     }
   };
