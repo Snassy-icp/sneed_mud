@@ -4,7 +4,7 @@ import { Principal } from '@dfinity/principal';
 import TextLog from '../components/game/TextLog';
 import RoomInterface from '../components/game/RoomInterface';
 
-function GamePage({ isAuthenticated, playerName, authenticatedActor }) {
+function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }) {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [playersInRoom, setPlayersInRoom] = useState([]);
@@ -153,6 +153,37 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor }) {
 
   async function handleCommand(command) {
     try {
+      // Handle help command (/help or /?)
+      if (command === '/help' || command === '/?') {
+        setMessages(prev => [...prev, `Available commands:
+
+Movement:
+  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)
+
+Communication:
+  /say <message>, /s <message> - Say something to everyone in the room
+  /whisper <player> <message>, /w <player> <message> - Send a private message to a player
+
+Items:
+  /inventory, /i - Show your inventory
+  /look [item], /l [item] - Look around the room or examine a specific item
+  /pick <item> [count], /take <item> [count] - Pick up an item from the room
+  /drop <item> [count] - Drop an item in the current room
+  /give <item> to <player> [count] - Give an item to another player
+
+Containers:
+  /open <container> - Open a container
+  /close <container> - Close a container
+  /put <item> in|into <container> - Put an item into a container
+
+Character:
+  /stats - View your character stats
+
+Help:
+  /help, /? - Show this help message`]);
+        return;
+      }
+
       // Handle movement commands (/go or /g)
       if (command.toLowerCase().startsWith('/go ') || command.toLowerCase().startsWith('/g ')) {
         const exitCommand = command.substring(command.indexOf(' ') + 1).trim();
@@ -216,7 +247,7 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor }) {
       }
 
       // Handle look command (/look)
-      if (command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
+      if (command.toLowerCase().startsWith('/look ') || command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
         if (!currentRoom) {
           setMessages(prev => [...prev, "You can't see anything."]);
           return;
@@ -263,6 +294,305 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor }) {
         }
 
         setMessages(prev => [...prev, ...roomMessages]);
+        return;
+      }
+
+      // Handle inventory command (/inventory)
+      if (command.toLowerCase() === '/inventory' || command.toLowerCase() === '/i') {
+        try {
+          const result = await authenticatedActor.getItems();
+          if ('ok' in result) {
+            const items = result.ok;
+            if (items.length === 0) {
+              setMessages(prev => [...prev, "Your inventory is empty."]);
+              return;
+            }
+
+            // Group items by type and count
+            const groupedItems = items.reduce((acc, item) => {
+              const key = `${item.item_type.id}-${item.item_type.name}`;
+              if (!acc[key]) {
+                acc[key] = {
+                  type: item.item_type,
+                  count: item.count,
+                  isOpen: item.is_open
+                };
+              } else {
+                acc[key].count += item.count;
+              }
+              return acc;
+            }, {});
+
+            // Format the inventory message
+            setMessages(prev => [
+              ...prev,
+              "Your inventory contains:",
+              ...Object.values(groupedItems).map(group => {
+                const countStr = group.count > 1 ? ` (x${group.count})` : '';
+                const containerStatus = group.type.is_container ? 
+                  ` [${group.isOpen ? 'open' : 'closed'}]` : 
+                  '';
+                return `  ${group.type.name}${countStr}${containerStatus}`;
+              })
+            ]);
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error getting inventory:", error);
+          setMessages(prev => [...prev, `Error: Failed to get inventory - ${error.message || 'Unknown error'}`]);
+        }
+        return;
+      }
+
+      // Handle drop command (/drop)
+      if (command.toLowerCase().startsWith('/drop ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: item [count]
+          const matches = argsString.match(/^(.+?)(?:\s+(\d+))?$/);
+          if (!matches) {
+            setMessages(prev => [...prev, "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'"]);
+            return;
+          }
+          
+          const [_, itemStr, countStr] = matches;
+          const count = countStr ? parseInt(countStr) : 1;
+          
+          try {
+            // Find matching item (inventory only)
+            const item = await findMatchingItem(itemStr, true);
+            
+            // Create room account
+            const targetAccount = {
+              owner: await authenticatedActor.getCanisterPrincipal(),
+              subaccount: [createRoomSubaccount(currentRoom.id)]
+            };
+
+            // Transfer item to room
+            const result = await authenticatedActor.transferItem(
+              item.id,
+              targetAccount,
+              count === item.count ? [] : [count]
+            );
+            
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            }
+            // Success message comes from backend via message polling
+          } catch (error) {
+            console.error("Error dropping item:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'"]);
+        }
+        return;
+      }
+
+      // Handle pick/take commands (/pick or /take)
+      if (command.toLowerCase().startsWith('/pick ') || command.toLowerCase().startsWith('/take ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: item [count]
+          const matches = argsString.match(/^(.+?)(?:\s+(\d+))?$/);
+          if (!matches) {
+            setMessages(prev => [...prev, "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'"]);
+            return;
+          }
+          
+          const [_, itemStr, countStr] = matches;
+          const count = countStr ? parseInt(countStr) : 1;
+          
+          try {
+            // Find matching item in room
+            const item = await findMatchingItem(itemStr, false);
+            
+            // Create target account (player's inventory)
+            const targetAccount = {
+              owner: Principal.fromText(principal),
+              subaccount: []
+            };
+
+            // Transfer item to inventory
+            const result = await authenticatedActor.transferItem(
+              item.id,
+              targetAccount,
+              count === item.count ? [] : [count]
+            );
+            
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            }
+            // Success message comes from backend via message polling
+          } catch (error) {
+            console.error("Error picking up item:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'"]);
+        }
+        return;
+      }
+
+      // Handle give command (/give)
+      if (command.toLowerCase().startsWith('/give ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: item to player [count]
+          const matches = argsString.match(/^(.+?)\s+to\s+(.+?)(?:\s+(\d+))?$/);
+          if (!matches) {
+            setMessages(prev => [...prev, "Error: Give command format is '/give <item> to <player>' or '/give <item> to <player> <count>'"]);
+            return;
+          }
+          
+          const [_, itemStr, targetPlayerName, countStr] = matches;
+          const count = countStr ? parseInt(countStr) : 1;
+          
+          try {
+            // First check if target player is in the room (exact match)
+            const targetPlayer = playersInRoom.find(([_, name]) => name === targetPlayerName);
+            
+            if (!targetPlayer) {
+              setMessages(prev => [...prev, `Error: ${targetPlayerName} is not in the room`]);
+              return;
+            }
+
+            // Find matching item (inventory only)
+            const item = await findMatchingItem(itemStr, true);
+            
+            // Create target account (player's inventory)
+            const targetAccount = {
+              owner: targetPlayer[0],
+              subaccount: []
+            };
+
+            // Transfer item to target player
+            const result = await authenticatedActor.transferItem(
+              item.id,
+              targetAccount,
+              count === item.count ? [] : [count]
+            );
+            
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            }
+            // Success message comes from backend via message polling
+          } catch (error) {
+            console.error("Error giving item:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, "Error: Give command format is '/give <item> to <player>' or '/give <item> to <player> <count>'"]);
+        }
+        return;
+      }
+
+      // Handle open container command (/open)
+      if (command.toLowerCase().startsWith('/open ')) {
+        const partialName = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          const item = await findMatchingItem(partialName);
+          const result = await authenticatedActor.toggleContainer(item.id);
+          if ('ok' in result) {
+            const isOpen = result.ok;
+            if (isOpen) {
+              setMessages(prev => [...prev, `${item.name} is now open`]);
+            } else {
+              // If it returned false, it was open, so toggle it back
+              const secondResult = await authenticatedActor.toggleContainer(item.id);
+              if ('ok' in secondResult) {
+                setMessages(prev => [...prev, `${item.name} is already open`]);
+              }
+            }
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error opening container:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
+      }
+
+      // Handle close container command (/close)
+      if (command.toLowerCase().startsWith('/close ')) {
+        const partialName = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          const item = await findMatchingItem(partialName);
+          const result = await authenticatedActor.toggleContainer(item.id);
+          if ('ok' in result) {
+            const isOpen = result.ok;
+            if (!isOpen) {
+              setMessages(prev => [...prev, `${item.name} is now closed`]);
+            } else {
+              // If it returned true, it was closed, so toggle it back
+              const secondResult = await authenticatedActor.toggleContainer(item.id);
+              if ('ok' in secondResult) {
+                setMessages(prev => [...prev, `${item.name} is already closed`]);
+              }
+            }
+          } else if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error closing container:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
+      }
+
+      // Handle put command (/put)
+      if (command.toLowerCase().startsWith('/put ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: item in|into container [count]
+          const matches = argsString.match(/^(.+?)\s+(?:in|into)\s+(.+?)(?:\s+(\d+))?$/);
+          if (!matches) {
+            setMessages(prev => [...prev, "Error: Put command format is '/put <item> in <container>' or '/put <item> in <container> <count>'"]);
+            return;
+          }
+          
+          const [_, itemStr, containerStr, countStr] = matches;
+          const count = countStr ? parseInt(countStr) : 1;
+          
+          try {
+            // Find matching item (inventory only)
+            const item = await findMatchingItem(itemStr, true);
+            
+            // Find matching container
+            const container = await findMatchingItem(containerStr);
+            
+            // Create target account (container's account)
+            const targetAccount = {
+              owner: await authenticatedActor.getCanisterPrincipal(),
+              subaccount: [createItemSubaccount(container.id)]
+            };
+
+            // Transfer item to container
+            const result = await authenticatedActor.transferItem(
+              item.id,
+              targetAccount,
+              count === item.count ? [] : [count]
+            );
+            
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            }
+            // Success message comes from backend via message polling
+          } catch (error) {
+            console.error("Error putting item in container:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, "Error: Put command format is '/put <item> in <container>' or '/put <item> in <container> <count>'"]);
+        }
         return;
       }
 

@@ -63,6 +63,7 @@ function App() {
                 isAuthenticated={isAuthenticated}
                 playerName={playerName}
                 authenticatedActor={authenticatedActor}
+                principal={principal}
               />
             } 
           />
