@@ -66,9 +66,9 @@ export function createICRC1Actor(canisterId, agent) {
         })], [IDL.Variant({
           Ok: IDL.Nat,
           Err: IDL.Variant({
-            InsufficientFunds: IDL.Null,
-            BadFee: IDL.Null,
-            TemporarilyUnavailable: IDL.Null,
+            InsufficientFunds: IDL.Record({}),
+            BadFee: IDL.Record({}),
+            TemporarilyUnavailable: IDL.Record({}),
             GenericError: IDL.Record({ message: IDL.Text, error_code: IDL.Nat })
           })
         })], [])
