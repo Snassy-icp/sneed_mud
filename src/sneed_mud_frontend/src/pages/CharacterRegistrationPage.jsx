@@ -20,12 +20,17 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet })
       if ('ok' in result) {
         setRegistrationSuccess(result.ok);
         onNameSet(name);
+        return <Navigate to="/game" replace />;
       } else if ('err' in result) {
         setRegistrationError(result.err);
       }
     } catch (error) {
       setRegistrationError("Failed to register name: " + error.message);
     }
+  }
+
+  if (registrationSuccess) {
+    return <Navigate to="/game" replace />;
   }
 
   return (
