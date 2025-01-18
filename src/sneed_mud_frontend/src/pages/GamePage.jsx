@@ -370,13 +370,19 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           const balances = await getAllBalances(
             principal,
             walletPreferences.hideZeroBalances,
-            agent
+            agent,
+            authenticatedActor
           );
           setMessages(prev => [
             ...prev,
             "Wallet:",
             `Principal: ${principal}`,
-            ...balances.map(b => `${b.symbol} (${b.name}): ${b.formatted}${b.error ? ` (Error: ${b.error})` : ''}`)
+            ...balances.map(b => {
+              const errorStr = b.error ? ` (Error: ${b.error})` : '';
+              const refreshStr = b.needsRefresh ? ' (Metadata needs refresh - use /wallet refresh)' : '';
+              const canisterStr = b.canisterId ? ` [${b.canisterId}]` : '';
+              return `${b.symbol} (${b.name}): ${b.formatted}${errorStr}${refreshStr}${canisterStr}`;
+            })
           ]);
         } catch (error) {
           setMessages(prev => [...prev, `Error fetching balances: ${error.message}`]);
@@ -409,14 +415,27 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         }
 
         const [, amountStr, tokenSymbol, recipient] = match;
-        const config = SUPPORTED_TOKENS[tokenSymbol];
-        if (!config) {
-          setMessages(prev => [...prev, `Unsupported token: ${tokenSymbol}`]);
-          return;
-        }
-
+        
         try {
-          const amount = parseTokenAmount(amountStr, config.decimals);
+          // First check if it's a supported token to get decimals
+          let decimals = 8; // Default
+          const config = SUPPORTED_TOKENS[tokenSymbol];
+          if (config) {
+            decimals = config.decimals;
+          } else {
+            // If not supported, check registered tokens
+            const registeredTokens = await authenticatedActor.getRegisteredTokens();
+            const token = registeredTokens.find(t => 
+              t.metadata && t.metadata.symbol === tokenSymbol
+            );
+            if (!token || !token.metadata) {
+              setMessages(prev => [...prev, `Unknown token: ${tokenSymbol}. Make sure it's registered and metadata is up to date.`]);
+              return;
+            }
+            decimals = token.metadata.decimals;
+          }
+
+          const amount = parseTokenAmount(amountStr, decimals);
           let targetPrincipal;
           let recipientName = recipient;
 
@@ -463,14 +482,52 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       // Handle transfer confirmation
       if (command === 'yes' && pendingTransfer) {
         try {
-          await transferTokens(
+          const identity = authClient.getIdentity();
+          const agent = new HttpAgent({ identity });
+          if (process.env.NODE_ENV !== "production") {
+            await agent.fetchRootKey();
+          }
+
+          const txId = await transferTokens(
             pendingTransfer.tokenSymbol,
-            pendingTransfer.fromPrincipal,
-            pendingTransfer.toPrincipal,
+            principal,
+            pendingTransfer.targetPrincipal,
             pendingTransfer.amount,
+            agent,
             authenticatedActor
           );
-          setMessages(prev => [...prev, `Successfully sent ${formatTokenAmount(pendingTransfer.amount, SUPPORTED_TOKENS[pendingTransfer.tokenSymbol].decimals)} ${pendingTransfer.tokenSymbol} to ${pendingTransfer.toPrincipal}`]);
+
+          // Send personalized messages to both parties
+          try {
+            // Get decimals for formatting
+            let decimals = 8; // Default
+            const config = SUPPORTED_TOKENS[pendingTransfer.tokenSymbol];
+            if (config) {
+              decimals = config.decimals;
+            } else {
+              const registeredTokens = await authenticatedActor.getRegisteredTokens();
+              const token = registeredTokens.find(t => 
+                t.metadata && t.metadata.symbol === pendingTransfer.tokenSymbol
+              );
+              if (token && token.metadata) {
+                decimals = token.metadata.decimals;
+              }
+            }
+
+            const formattedAmount = formatTokenAmount(pendingTransfer.amount, decimals);
+            await authenticatedActor.notifyTokenTransfer(
+              Principal.fromText(principal),
+              Principal.fromText(pendingTransfer.targetPrincipal),
+              pendingTransfer.senderName,
+              pendingTransfer.recipientName,
+              formattedAmount,
+              pendingTransfer.tokenSymbol,
+              txId.toString()
+            );
+          } catch (error) {
+            console.error("Error sending system messages:", error);
+          }
+
         } catch (error) {
           setMessages(prev => [...prev, `Error: ${error.message}`]);
         }

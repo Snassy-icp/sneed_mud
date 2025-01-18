@@ -91,20 +91,29 @@ module {
   public func getRegisteredTokens(
     state: MudState,
     caller: Principal
-  ) : [Types.TokenInfo] {
+  ) : Result.Result<[Types.TokenInfo], Text> {
     switch (state.registeredTokens.get(caller)) {
-      case null { [] };
+      case null { #ok([]) };
       case (?tokens) {
         let result = Buffer.Buffer<Types.TokenInfo>(tokens.size());
+        var hasStaleMetadata = false;
+        
         for (ledgerCanisterId in tokens.vals()) {
           let metadata = getMetadata(state, ledgerCanisterId);
+          if (metadata == null) {
+            hasStaleMetadata := true;
+          };
           result.add({
             ledgerCanisterId = ledgerCanisterId;
             metadata = metadata;
-            needsRefresh = metadata == null;
           });
         };
-        Buffer.toArray(result)
+        
+        if (hasStaleMetadata) {
+          #err("Some token metadata is stale and needs refresh")
+        } else {
+          #ok(Buffer.toArray(result))
+        }
       };
     }
   };

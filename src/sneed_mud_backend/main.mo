@@ -451,59 +451,63 @@ actor class MudBackend() = this {
     TokenManager.unregisterToken(state, msg.caller, ledgerCanisterId)
   };
 
-  public query(msg) func getRegisteredTokens() : async [Types.TokenInfo] {
+  public query(msg) func getRegisteredTokens() : async Result.Result<[Types.TokenInfo], Text> {
     TokenManager.getRegisteredTokens(state, msg.caller)
   };
 
   public shared(msg) func refreshTokenMetadata() : async Result.Result<(), Text> {
-    let staleTokens = TokenManager.getRegisteredTokens(state, msg.caller);
-    let staleIds = Array.mapFilter<Types.TokenInfo, Principal>(staleTokens, func(t) {
-        if (t.needsRefresh) { ?t.ledgerCanisterId } else { null }
-    });
-    
-    if (staleIds.size() == 0) {
-        return #ok(());
-    };
-    
-    // Refresh metadata for stale tokens
-    for (tokenId in staleIds.vals()) {
-        try {
+    switch (await getRegisteredTokens()) {
+      case (#err(e)) { #err(e) };
+      case (#ok(tokens)) {
+        let staleIds = Array.mapFilter<Types.TokenInfo, Principal>(tokens, func(t) {
+          if (Option.isNull(t.metadata)) { ?t.ledgerCanisterId } else { null }
+        });
+        
+        if (staleIds.size() == 0) {
+          return #ok(());
+        };
+        
+        // Refresh metadata for stale tokens
+        for (tokenId in staleIds.vals()) {
+          try {
             let token = actor (Principal.toText(tokenId)) : ICRC1.Token;
             let metadata = await token.icrc1_metadata();
             let fee = await token.icrc1_fee();
             
             let tokenMetadata : Types.TokenMetadata = {
-                name = "";  // Will be populated from metadata
-                symbol = "";  // Will be populated from metadata
-                decimals = 8;  // Default, will be overridden
-                fee = fee;
-                lastRefreshed = Time.now()
+              name = "";  // Will be populated from metadata
+              symbol = "";  // Will be populated from metadata
+              decimals = 8;  // Default, will be overridden
+              fee = fee;
+              lastRefreshed = Time.now()
             };
             
             // Extract name, symbol, decimals from metadata
             var updatedMetadata = tokenMetadata;
             for (entry in metadata.vals()) {
-                let key = entry.0;
-                let value = entry.1;
-                updatedMetadata := switch (key, value) {
-                    case ("icrc1:name", #Text(name)) { { updatedMetadata with name = name } };
-                    case ("icrc1:symbol", #Text(symbol)) { { updatedMetadata with symbol = symbol } };
-                    case ("icrc1:decimals", #Nat(dec)) { { updatedMetadata with decimals = dec } };
-                    case ("icrc1:decimals", #Nat8(dec)) { { updatedMetadata with decimals = Nat8.toNat(dec) } };
-                    case ("icrc1:decimals", #Nat16(dec)) { { updatedMetadata with decimals = Nat16.toNat(dec) } };
-                    case ("icrc1:decimals", #Nat32(dec)) { { updatedMetadata with decimals = Nat32.toNat(dec) } };
-                    case ("icrc1:decimals", #Nat64(dec)) { { updatedMetadata with decimals = Nat64.toNat(dec) } };
-                    case _ { updatedMetadata };
-                };
+              let key = entry.0;
+              let value = entry.1;
+              updatedMetadata := switch (key, value) {
+                case ("icrc1:name", #Text(name)) { { updatedMetadata with name = name } };
+                case ("icrc1:symbol", #Text(symbol)) { { updatedMetadata with symbol = symbol } };
+                case ("icrc1:decimals", #Nat(dec)) { { updatedMetadata with decimals = dec } };
+                case ("icrc1:decimals", #Nat8(dec)) { { updatedMetadata with decimals = Nat8.toNat(dec) } };
+                case ("icrc1:decimals", #Nat16(dec)) { { updatedMetadata with decimals = Nat16.toNat(dec) } };
+                case ("icrc1:decimals", #Nat32(dec)) { { updatedMetadata with decimals = Nat32.toNat(dec) } };
+                case ("icrc1:decimals", #Nat64(dec)) { { updatedMetadata with decimals = Nat64.toNat(dec) } };
+                case _ { updatedMetadata };
+              };
             };
             
             ignore TokenManager.updateTokenMetadata(state, msg.caller, tokenId, updatedMetadata);
-        } catch (e) {
+          } catch (e) {
             // Log error but continue with other tokens
             Debug.print("Error refreshing metadata for token: " # Principal.toText(tokenId) # " - " # Error.message(e));
+          };
         };
-    };
-    
-    #ok(())
+        
+        #ok(())
+      };
+    }
   };
 }

@@ -134,7 +134,6 @@ module {
   public type TokenInfo = {
     ledgerCanisterId: Principal;
     metadata: ?TokenMetadata;  // None if stale or not in cache
-    needsRefresh: Bool;
   };
 
   // Stable state for token registrations
