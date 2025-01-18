@@ -556,7 +556,7 @@ Communication:
 
 Items:
   /inventory, /i - Show your inventory
-  /look [item], /l [item] - Look around the room or examine a specific item
+  /look [target], /l [target] - Look around the room or examine a specific target (item, player, or exit)
   /pick <item> [count], /take <item> [count] - Pick up an item from the room
   /drop <item> [count] - Drop an item in the current room
   /give <item> to <player> [count] - Give an item to another player
@@ -654,6 +654,86 @@ Help:
         if (!currentRoom) {
           setMessages(prev => [...prev, "You can't see anything."]);
           return;
+        }
+
+        // Check if looking at a specific target
+        if (command.toLowerCase().startsWith('/look ') || command.toLowerCase().startsWith('/l ')) {
+          const targetName = command.substring(command.indexOf(' ') + 1).trim();
+
+          // First check if it's a player
+          const targetPlayer = playersInRoom.find(([_, name]) => name.toLowerCase() === targetName.toLowerCase());
+          if (targetPlayer) {
+            setMessages(prev => [...prev, `${targetPlayer[1]} is here.`]);
+            return;
+          }
+
+          // Then check if it's an exit
+          if (currentRoom.exits) {
+            const matchingExit = currentRoom.exits.find(([_, exit]) => 
+              exit.name.toLowerCase() === targetName.toLowerCase() ||
+              (exit.direction && exit.direction.toLowerCase() === targetName.toLowerCase())
+            );
+            if (matchingExit) {
+              const [_, exit] = matchingExit;
+              const directionStr = exit.direction ? ` (${exit.direction})` : '';
+              setMessages(prev => [...prev, 
+                `${exit.name}${directionStr}`,
+                exit.description
+              ]);
+              return;
+            }
+          }
+
+          // Finally check if it's an item
+          try {
+            // Find matching item in room or inventory
+            const item = await findMatchingItem(targetName, false);
+            const itemResult = await authenticatedActor.getItem(item.id);
+            
+            if ('ok' in itemResult) {
+              const itemInfo = itemResult.ok;
+              const messages = [
+                `${itemInfo.item_type.name}`,
+                itemInfo.item_type.description,
+              ];
+
+              // Add container-specific information
+              if (itemInfo.item_type.is_container) {
+                messages.push("");
+                if (itemInfo.is_open) {
+                  const contentsResult = await authenticatedActor.getContainerContents(item.id);
+                  if ('ok' in contentsResult) {
+                    const contents = contentsResult.ok;
+                    if (contents.length > 0) {
+                      messages.push("Contents:");
+                      for (const itemId of contents) {
+                        const contentItemResult = await authenticatedActor.getItem(itemId);
+                        if ('ok' in contentItemResult) {
+                          const contentItem = contentItemResult.ok;
+                          const countStr = contentItem.count > 1 ? ` (x${contentItem.count})` : '';
+                          messages.push(`  ${contentItem.item_type.name}${countStr}`);
+                        }
+                      }
+                    } else {
+                      messages.push("The container is empty.");
+                    }
+                  }
+                } else {
+                  messages.push("The container is closed.");
+                }
+              }
+
+              setMessages(prev => [...prev, ...messages]);
+              return;
+            } else {
+              setMessages(prev => [...prev, `Error: ${itemResult.err}`]);
+              return;
+            }
+          } catch (error) {
+            console.error("Error examining item:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            return;
+          }
         }
 
         const roomMessages = [
