@@ -110,6 +110,11 @@ module {
     switch (State.canPerformAction(state, attacker, #Combat)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
+        // Check attack cooldown
+        if (not _canAttack(state, attacker)) {
+          return #err("Attack is on cooldown");
+        };
+        
         // Get attacker stats
         switch (state.playerDynamicStats.get(attacker)) {
           case null { return #err("Attacker has no stats") };
