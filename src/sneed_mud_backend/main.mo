@@ -388,7 +388,8 @@ actor class MudBackend() = this {
   };
 
   public shared(msg) func respawn() : async Result.Result<(), Text> {
-    Combat.processPlayerRespawn(state, msg.caller)
+    let result = Combat.processPlayerRespawn(state, msg.caller);
+    result
   };
 
   // Get a player's principal from their name
@@ -507,11 +508,11 @@ actor class MudBackend() = this {
                 };
                 case ("icrc1:decimals", value) {
                   let decimals = switch value {
-                    case (#Nat(n)) { n };
                     case (#Nat8(n)) { Nat8.toNat(n) };
                     case (#Nat16(n)) { Nat16.toNat(n) };
                     case (#Nat32(n)) { Nat32.toNat(n) };
                     case (#Nat64(n)) { Nat64.toNat(n) };
+                    case (#Nat(n)) { n };
                     case _ { updatedMetadata.decimals };
                   };
                   { updatedMetadata with decimals = decimals }
