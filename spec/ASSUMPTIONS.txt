@@ -1,0 +1,17 @@
+SNEED MUD - Technical Assumptions
+================================
+
+This document lists the core technical assumptions that inform the design of all game systems.
+
+1. Internet Computer Platform Constraints
+---------------------------------------
+- Update calls have 1-2 second latency (minimum)
+- Query calls should not exceed once per second frequency
+- State updates and combat actions must account for these latencies
+- All timing values in specifications must respect these technical limitations
+
+Impact:
+- All game systems must be designed with these constraints in mind
+- Timing values in specifications must allow for these latencies
+- User interface must account for expected delays
+- Game mechanics should feel natural despite these constraints 

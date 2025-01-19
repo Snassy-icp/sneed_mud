@@ -7,6 +7,8 @@
 SNEED MUD - Technical Specifications
 ================================
 
+This directory contains detailed technical specifications for various systems and mechanics in SNEED MUD.
+
 IMPORTANT: SPECIFICATION ENFORCEMENT RULES
 ----------------------------------------
 1. These specification files are LAW. They represent the definitive, authoritative design of all systems.
@@ -15,6 +17,7 @@ IMPORTANT: SPECIFICATION ENFORCEMENT RULES
 
 3. Before ANY code modification:
    - The relevant specification MUST be consulted
+   - ALL referenced documents MUST be reviewed (see below)
    - The proposed changes MUST be verified against the specification
    - If any conflict exists between proposed changes and the spec, the spec wins
 
@@ -32,12 +35,19 @@ IMPORTANT: SPECIFICATION ENFORCEMENT RULES
 
 This directory contains detailed technical specifications for various systems and mechanics in SNEED MUD.
 
+Referenced Documents
+------------------
+The following documents MUST be consulted alongside any specification:
+1. ASSUMPTIONS.txt - Core technical constraints and their impacts
+[Additional reference documents will be added as needed]
+
 Files:
 - Combat.txt: Details the combat system mechanics, timings, and formulas
 - (Additional spec files will be added as systems are documented)
 
 Purpose:
 These specifications serve as the authoritative reference for how game systems should work. They should be consulted when implementing new features or modifying existing ones to ensure consistency with the intended design.
+
 
 Format:
 Each specification file follows a standard format:

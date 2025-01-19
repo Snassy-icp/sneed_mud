@@ -1,6 +1,14 @@
 PROPOSED Combat & Stats System Specification
 =====================================
 
+Technical Assumptions
+-------------------
+1. Internet Computer Platform Constraints:
+   - Update calls have 1-2 second latency (minimum)
+   - Query calls should not exceed once per second frequency
+   - State updates and combat actions must account for these latencies
+   - All timing values in the specification must respect these technical limitations
+
 1. Overview
 -----------
 A comprehensive combat system featuring character attributes, equipment effects, status conditions, and tactical decision-making. This system aims to create engaging PvP encounters while maintaining balance.
@@ -30,14 +38,18 @@ Derived Stats:
 Initiative System:
 - Combat rounds based on Attack Speed
 - Higher Attack Speed allows more frequent actions
-- Base round duration: 3 seconds
-- Minimum time between actions: 1 second
+- Base round duration: 5 seconds (system-wide state evaluation interval)
+- Minimum time between actions: 2.5 seconds (global cooldown for all actions)
+
+Note: Base round duration represents the fundamental "tick" of the combat system where overall state and effects are evaluated. 
+Minimum time between actions is the global cooldown that applies to ANY player action, ensuring no actions can be performed more 
+frequently than the platform can handle.
 
 Action Types:
 1. Basic Attack
    - Physical damage based on Physical Attack
    - Can be dodged or critical hit
-   - 1 second cooldown
+   - 2.5 second cooldown
 
 2. Special Abilities
    - Unlocked at specific levels
@@ -46,9 +58,9 @@ Action Types:
    - Longer cooldowns (5-30 seconds)
 
 3. Defensive Actions
-   - Block: Reduces incoming damage by 50%, 5s cooldown
-   - Dodge: Increased dodge chance for 3s, 8s cooldown
-   - Counter: Return damage when hit, 10s cooldown
+   - Block: Reduces incoming damage by 50%, 6s cooldown
+   - Dodge: Increased dodge chance for 3s, 10s cooldown
+   - Counter: Return damage when hit, 12s cooldown
 
 Status Effects:
 - Bleeding: DoT physical damage
@@ -59,17 +71,18 @@ Status Effects:
 
 Combat State:
 - Enters combat on attack/being attacked
-- Combat state lasts 15 seconds from last action
-- Leaving combat starts HP/MP regeneration
+- Combat state lasts 20 seconds from last action
+- Leaving combat does not start HP/MP regeneration (will use a /rest command for this)
 - Cannot use certain abilities out of combat
+- Cannot use certain other abilities when in combat
 
 4. Equipment & Items
 -------------------
 Weapon Types:
 - One-handed: Balanced stats, allows shield
 - Two-handed: Higher damage, no shield
-- Ranged: Distance attacks, lower defense
 - Magic: Enhances spell damage
+[See Discussion Point #1 regarding Ranged Weapons]
 
 Armor Types:
 - Light: High dodge, low defense
@@ -89,6 +102,24 @@ XP Gain:
 - Bonus XP for higher level victims
 - Group combat splits XP based on contribution
 
+Level Formula:
+- Base XP for level N = 100 * (N^2)
+- This creates a curve where:
+  * Level 1->2:   100 XP  (about 7 same-level kills)
+  * Level 5->6:   2,500 XP
+  * Level 10->11: 10,000 XP
+  * Level 20->21: 40,000 XP
+  * Level 30->31: 90,000 XP
+  * Level 50->51: 250,000 XP
+
+Total XP to reach level N = 100 * (N * (N-1) / 2)
+
+Progression Pacing:
+- Early levels (1-10): Quick progression, ~1-2 hours per level
+- Mid levels (11-30): Moderate progression, ~2-4 hours per level
+- High levels (31-50): Slower progression, ~4-8 hours per level
+- Level 50 is current cap
+
 Level Benefits:
 - Attribute points: 3 per level
 - New abilities every 5 levels
@@ -100,21 +131,20 @@ Level Benefits:
 Death Mechanics:
 - Die at 0 HP
 - 50% XP penalty for next 30 minutes
-- Drop non-bound items
+- Will not lose any items or money
 - Cannot be attacked while dead
 
 Respawn Options:
-- Auto-respawn after 60 seconds
-- Manual respawn at any time
-- Respawn at nearest safe point
-- Full HP/MP on respawn
+- Manual respawn becomes available 60 seconds after death
+- Respawn always occurs in starting room (room 0)
+- Full HP/MP restored on respawn
 
 7. Constants & Formulas
 ----------------------
 Combat Timings:
-- Base Round: 3 seconds
-- Combat Duration: 15 seconds
-- Global Cooldown: 1 second
+- Base Round: 5 seconds
+- Combat Duration: 20 seconds
+- Global Cooldown: 2.5 seconds
 
 Damage Formula:
 Physical Damage = (Attack * (100 / (100 + Defense))) * (1 + Critical)
@@ -128,5 +158,25 @@ Magical Damage = (Magic Attack * (100 / (100 + Magic Defense)))
 - PvP level restrictions (±5 levels)
 - Anti-camping mechanics
 - Diminishing returns on crowd control
+
+Discussion Points
+---------------
+#1 - Ranged Weapons
+Currently specified as: "Ranged: Distance attacks, lower defense"
+Issue: May not be suitable for room-based combat system
+Options:
+1. Remove ranged weapons entirely
+2. Redefine as special combat style (first strike, kiting)
+3. TBD based on discussion
+Status: Under review
+
+#2 - Level Cap and End-game Progression
+Currently specified as: Level 50 cap with quadratic XP scaling
+Issue: Need to determine if this provides enough content and proper pacing
+Options:
+1. Keep current cap but add prestige system
+2. Extend to higher cap with adjusted curve
+3. Add alternate progression systems at cap
+Status: Under review
 
 Note: This is a draft proposal for discussion and refinement. All values and mechanics are subject to adjustment based on feedback and testing. 
