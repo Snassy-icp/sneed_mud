@@ -1,0 +1,59 @@
+Combat System Specification
+=======================
+
+1. Overview
+-----------
+The combat system in SNEED MUD is a turn-based PvP system with cooldowns, combat states, and death mechanics.
+
+2. Key Components
+----------------
+- Combat State Tracking
+- Attack Processing
+- Damage Calculation
+- Death & Respawn System
+- Experience (XP) Rewards
+
+3. Detailed Mechanics
+--------------------
+Combat State:
+- Players enter combat state when attacking or being attacked
+- Combat state lasts 20 seconds from the last combat action
+- Players must wait 5 seconds between attacks (cooldown)
+
+Attack Process:
+- Attacker and target must be in the same room
+- System verifies attacker can perform combat actions
+- Damage is calculated based on attacker's level
+- Target's HP is reduced by damage amount
+- Both players enter combat state
+
+Death & Respawn:
+- Players die when HP reaches 0
+- Auto-respawn occurs 60 seconds after death
+- Manual respawn available when dead
+- Respawn restores full HP
+- Players respawn in starting room (room 0)
+
+XP System:
+- XP awarded for killing players
+- XP amount = target's level * 10
+- Base XP of 10 if target has no level
+
+4. Constants & Formulas
+----------------------
+Timings:
+- Combat Duration: 20 seconds
+- Attack Cooldown: 5 seconds
+- Respawn Delay: 60 seconds
+
+Damage Formula:
+- Base Damage = (Attacker's Level * 20) + 10
+
+5. Edge Cases & Restrictions
+--------------------------
+- Cannot attack dead players
+- Cannot attack players in different rooms
+- Cannot attack while on cooldown
+- Cannot attack without proper registration/stats
+- Combat state persists even if players move rooms
+- Death cancels combat state 
