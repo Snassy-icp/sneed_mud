@@ -594,33 +594,39 @@ module {
     switch (state.players.get(caller)) {
       case null { return #err("You need to register a name first") };
       case (?playerName) {
-        // Update player's activity timestamp
-        State.updatePlayerActivity(state, caller);
-
-        // Get player's current room
-        switch (getCurrentRoom(state, caller)) {
+        // Check if player can move
+        switch (State.canPerformAction(state, caller, #Movement)) {
           case (#err(e)) { return #err(e) };
-          case (#ok(currentRoom)) {
-            // Find the exit (case-insensitive comparison)
-            let lowerExitId = Text.toLowercase(exitId);
-            for ((id, exit) in currentRoom.exits.vals()) {
-              if (Text.toLowercase(id) == lowerExitId) {
-                // Found the exit, try to move to target room
-                switch (state.rooms.get(exit.targetRoomId)) {
-                  case null { return #err("Target room not found") };
-                  case (?targetRoom) {
-                    // Handle all movement-related messages
-                    handleMovementMessages(state, caller, playerName, currentRoom, targetRoom, exit.name);
-                    
-                    // Move player
-                    state.playerLocations.put(caller, exit.targetRoomId);
-                    
-                    return #ok(targetRoom);
+          case (#ok(_)) {
+            // Update player's activity timestamp
+            State.updatePlayerActivity(state, caller);
+
+            // Get player's current room
+            switch (getCurrentRoom(state, caller)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(currentRoom)) {
+                // Find the exit (case-insensitive comparison)
+                let lowerExitId = Text.toLowercase(exitId);
+                for ((id, exit) in currentRoom.exits.vals()) {
+                  if (Text.toLowercase(id) == lowerExitId) {
+                    // Found the exit, try to move to target room
+                    switch (state.rooms.get(exit.targetRoomId)) {
+                      case null { return #err("Target room not found") };
+                      case (?targetRoom) {
+                        // Handle all movement-related messages
+                        handleMovementMessages(state, caller, playerName, currentRoom, targetRoom, exit.name);
+                        
+                        // Move player
+                        state.playerLocations.put(caller, exit.targetRoomId);
+                        
+                        return #ok(targetRoom);
+                      };
+                    };
                   };
                 };
+                return #err("Exit not found");
               };
             };
-            return #err("Exit not found");
           };
         };
       };
@@ -665,19 +671,31 @@ module {
     switch (state.players.get(caller)) {
       case null { #err("You need to register a name first") };
       case (?playerName) {
-        switch (state.playerLocations.get(caller)) {
-          case null { #err("You're not in any room") };
-          case (?roomId) {
-            // Update sender's activity timestamp
-            State.updatePlayerActivity(state, caller);
+        // Check if player can communicate
+        switch (State.canPerformAction(state, caller, #Communication)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            switch (state.playerLocations.get(caller)) {
+              case null { #err("You're not in any room") };
+              case (?roomId) {
+                // Update sender's activity timestamp
+                State.updatePlayerActivity(state, caller);
 
-            // Send personalized message to the speaker
-            addMessageToLog(state, caller, "You say: " # message);
-            
-            // Broadcast to others in room
-            let players = getAllPlayersInRoom(state, roomId);
-            broadcastToPlayers(state, players, playerName # " says: " # message, ?caller);
-            #ok(())
+                // Get death status for message prefix
+                let prefix = switch (state.playerDynamicStats.get(caller)) {
+                  case (?stats) { if (stats.isDead) { "*GHOST* " } else { "" } };
+                  case null { "" };
+                };
+
+                // Send personalized message to the speaker
+                addMessageToLog(state, caller, "You say: " # message);
+                
+                // Broadcast to others in room with ghost prefix if dead
+                let players = getAllPlayersInRoom(state, roomId);
+                broadcastToPlayers(state, players, prefix # playerName # " says: " # message, ?caller);
+                #ok(())
+              };
+            };
           };
         };
       };
@@ -688,28 +706,40 @@ module {
     switch (state.players.get(caller)) {
       case null { #err("You need to register a name first") };
       case (?senderName) {
-        // Find target principal by name
-        switch (State.findPrincipalByName(state, targetName)) {
-          case null { #err("Player not found: " # targetName) };
-          case (?targetPrincipal) {
-            // Update sender's activity timestamp
-            State.updatePlayerActivity(state, caller);
+        // Check if player can communicate
+        switch (State.canPerformAction(state, caller, #Communication)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            // Find target principal by name
+            switch (State.findPrincipalByName(state, targetName)) {
+              case null { #err("Player not found: " # targetName) };
+              case (?targetPrincipal) {
+                // Update sender's activity timestamp
+                State.updatePlayerActivity(state, caller);
 
-            // Deliver message to target
-            addMessageToLog(state, targetPrincipal, senderName # " whispers: " # message);
-            addMessageToLog(state, caller, "You whisper to " # targetName # ": " # message);
+                // Get death status for message prefix
+                let prefix = switch (state.playerDynamicStats.get(caller)) {
+                  case (?stats) { if (stats.isDead) { "*GHOST* " } else { "" } };
+                  case null { "" };
+                };
 
-            // Check target's status and send auto-reply if needed
-            switch (State.getPlayerStatus(state, targetPrincipal)) {
-              case (#Online) { /* No auto-reply needed */ };
-              case (#Afk) { 
-                addMessageToLog(state, caller, targetName # " is currently AFK and will see your message later");
-              };
-              case (#Offline) {
-                addMessageToLog(state, caller, targetName # " is currently offline and will see your message later");
+                // Deliver message to target with ghost prefix if dead
+                addMessageToLog(state, targetPrincipal, prefix # senderName # " whispers: " # message);
+                addMessageToLog(state, caller, "You whisper to " # targetName # ": " # message);
+
+                // Check target's status and send auto-reply if needed
+                switch (State.getPlayerStatus(state, targetPrincipal)) {
+                  case (#Online) { /* No auto-reply needed */ };
+                  case (#Afk) { 
+                    addMessageToLog(state, caller, targetName # " is currently AFK and will see your message later");
+                  };
+                  case (#Offline) {
+                    addMessageToLog(state, caller, targetName # " is currently offline and will see your message later");
+                  };
+                };
+                #ok(())
               };
             };
-            #ok(())
           };
         };
       };

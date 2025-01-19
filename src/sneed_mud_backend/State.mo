@@ -10,8 +10,12 @@ import BufferUtils "./BufferUtils";
 import Float "mo:base/Float";
 import Int "mo:base/Int";
 import Time "mo:base/Time";
+import Result "mo:base/Result";
+import Debug "mo:base/Debug";
 
 module {
+  type ActionType = Types.ActionType;
+
   public type StableState = {
     var nextRoomId: Types.RoomId;
     var nextMessageId: Types.MessageId;
@@ -287,5 +291,47 @@ module {
 
   public func findPrincipalByName(state: MudState, name: Text) : ?Principal {
     state.usedNames.get(name)
+  };
+
+  // Check if a player can perform a specific action
+  public func canPerformAction(state: MudState, caller: Principal, actionType: ActionType) : Result.Result<(), Text> {
+    // First check if player exists
+    switch (state.players.get(caller)) {
+      case null { #err("You need to register a name first") };
+      case (?playerName) {
+        // Get player stats
+        switch (state.playerDynamicStats.get(caller)) {
+          case null { #err("No character found") };
+          case (?stats) {
+            // If player is dead, only allow certain actions
+            if (stats.isDead) {
+              switch (actionType) {
+                case (#Communication) { #ok(()) };
+                case (#Info) { #ok(()) };
+                case (#Respawn) {
+                  // Check respawn cooldown
+                  switch (stats.deathTime) {
+                    case null { #err("No death time recorded") };
+                    case (?deathTime) {
+                      let now = Time.now();
+                      let timeSinceDeath = now - deathTime;
+                      if (timeSinceDeath < 60_000_000_000) { // 60 seconds in nanoseconds
+                        #err("You must wait " # Int.toText((60_000_000_000 - timeSinceDeath) / 1_000_000_000) # " seconds to respawn")
+                      } else {
+                        #ok(())
+                      }
+                    };
+                  }
+                };
+                case _ { #err("You cannot do that while dead") };
+              }
+            } else {
+              // Living players can do anything
+              #ok(())
+            }
+          };
+        };
+      };
+    }
   };
 } 

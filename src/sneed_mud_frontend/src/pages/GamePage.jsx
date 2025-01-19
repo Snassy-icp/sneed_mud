@@ -543,6 +543,21 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         return;
       }
 
+      // Handle respawn command
+      if (command === '/respawn') {
+        try {
+          const result = await authenticatedActor.respawn();
+          if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+          // Success message comes from backend via message polling
+        } catch (error) {
+          console.error("Error respawning:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
+      }
+
       // Handle help command (/help or /?)
       if (command === '/help' || command === '/?') {
         setMessages(prev => [...prev, `Available commands:
@@ -556,6 +571,7 @@ Communication:
 
 Combat:
   /attack <player> - Attack another player in the same room
+  /respawn - Return to the starting point after death (60 second cooldown)
 
 Items:
   /inventory, /i - Show your inventory

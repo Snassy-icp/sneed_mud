@@ -161,4 +161,14 @@ module {
 
   // Stable state for token registrations
   public type StableTokenRegistrations = [(Principal, [Principal])];  // user -> [ledger canister IDs]
+
+  // Action types for permission checking
+  public type ActionType = {
+    #Movement;
+    #Combat;
+    #ItemAction;
+    #Communication;
+    #Info;
+    #Respawn;
+  };
 } 

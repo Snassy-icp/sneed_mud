@@ -383,63 +383,12 @@ actor class MudBackend() = this {
   };
 
   // Combat system
-  public shared(msg) func attack(targetName: Text) : async Result.Result<Text, Text> {
-    // First check if the target exists
-    switch (State.findPrincipalByName(state, targetName)) {
-      case null { #err("Player not found: " # targetName) };
-      case (?targetPrincipal) {
-        // Check if target is in the same room
-        switch (state.playerLocations.get(msg.caller)) {
-          case null { #err("You are not in any room") };
-          case (?attackerRoom) {
-            switch (state.playerLocations.get(targetPrincipal)) {
-              case null { #err("Target is not in any room") };
-              case (?targetRoom) {
-                if (attackerRoom != targetRoom) {
-                  return #err("Target is not in the same room");
-                };
+  public shared(msg) func attack(targetName: Text) : async Result.Result<(), Text> {
+    await Combat.processPlayerAttack(state, msg.caller, targetName)
+  };
 
-                // Process the attack
-                switch (Combat.processPlayerAttack(state, msg.caller, targetPrincipal)) {
-                  case (#err(e)) { #err(e) };
-                  case (#ok(result)) {
-                    // Get player names for the message
-                    let attackerName = switch (state.players.get(msg.caller)) {
-                      case null { "Unknown" };
-                      case (?name) { name };
-                    };
-                    let targetName = switch (state.players.get(targetPrincipal)) {
-                      case null { "Unknown" };
-                      case (?name) { name };
-                    };
-
-                    // Create combat message
-                    let message = attackerName # " attacks " # targetName # " for " # 
-                                Nat.toText(result.damage) # " damage! " # targetName # 
-                                " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
-
-                    // Add death message if target died
-                    let finalMessage = if (result.targetDied) {
-                      message # "\n" # targetName # " has been slain!";
-                    } else {
-                      message
-                    };
-
-                    // Broadcast to room
-                    Lib.broadcastToRoom(state, attackerRoom, finalMessage);
-
-                    // Check for respawns
-                    Combat.checkAndHandleRespawn(state, targetPrincipal);
-
-                    #ok(finalMessage)
-                  };
-                }
-              };
-            };
-          };
-        };
-      };
-    }
+  public shared(msg) func respawn() : async Result.Result<(), Text> {
+    Combat.processPlayerRespawn(state, msg.caller)
   };
 
   // Get a player's principal from their name
@@ -550,13 +499,23 @@ actor class MudBackend() = this {
               let key = entry.0;
               let value = entry.1;
               updatedMetadata := switch (key, value) {
-                case ("icrc1:name", #Text(name)) { { updatedMetadata with name = name } };
-                case ("icrc1:symbol", #Text(symbol)) { { updatedMetadata with symbol = symbol } };
-                case ("icrc1:decimals", #Nat(dec)) { { updatedMetadata with decimals = dec } };
-                case ("icrc1:decimals", #Nat8(dec)) { { updatedMetadata with decimals = Nat8.toNat(dec) } };
-                case ("icrc1:decimals", #Nat16(dec)) { { updatedMetadata with decimals = Nat16.toNat(dec) } };
-                case ("icrc1:decimals", #Nat32(dec)) { { updatedMetadata with decimals = Nat32.toNat(dec) } };
-                case ("icrc1:decimals", #Nat64(dec)) { { updatedMetadata with decimals = Nat64.toNat(dec) } };
+                case ("icrc1:name", #Text(name)) { 
+                  { updatedMetadata with name = name } 
+                };
+                case ("icrc1:symbol", #Text(symbol)) { 
+                  { updatedMetadata with symbol = symbol } 
+                };
+                case ("icrc1:decimals", value) {
+                  let decimals = switch value {
+                    case (#Nat(n)) { n };
+                    case (#Nat8(n)) { Nat8.toNat(n) };
+                    case (#Nat16(n)) { Nat16.toNat(n) };
+                    case (#Nat32(n)) { Nat32.toNat(n) };
+                    case (#Nat64(n)) { Nat64.toNat(n) };
+                    case _ { updatedMetadata.decimals };
+                  };
+                  { updatedMetadata with decimals = decimals }
+                };
                 case _ { updatedMetadata };
               };
             };
