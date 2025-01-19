@@ -21,6 +21,61 @@ module {
 
   let starting_room : RoomId = 0;
 
+  // Constants for base stats
+  let BASE_HP : Nat = 100;
+  let BASE_MP : Nat = 50;
+  let BASE_PHYSICAL_ATTACK : Nat = 10;
+  let BASE_PHYSICAL_DEFENSE : Nat = 5;
+  let BASE_MAGIC_ATTACK : Nat = 10;
+  let BASE_MAGIC_DEFENSE : Nat = 5;
+  let BASE_ATTACK_SPEED : Nat = 10000;  // 100% stored as 10000
+  let BASE_CRIT_CHANCE : Nat = 500;     // 5% stored as 500
+
+  // Constants for level scaling
+  let HP_PER_LEVEL : Nat = 20;
+  let MP_PER_LEVEL : Nat = 10;
+  let PHYSICAL_ATTACK_PER_LEVEL : Nat = 2;
+  let PHYSICAL_DEFENSE_PER_LEVEL : Nat = 1;
+  let MAGIC_ATTACK_PER_LEVEL : Nat = 2;
+  let MAGIC_DEFENSE_PER_LEVEL : Nat = 1;
+
+  // Constants for attribute scaling
+  let HP_PER_CONSTITUTION : Nat = 10;
+  let MP_PER_INTELLIGENCE : Nat = 5;
+  let MP_PER_WISDOM : Nat = 3;
+  let ATTACK_PER_STRENGTH : Nat = 2;
+  let SPEED_PER_DEXTERITY : Nat = 50;  // 0.5% per point stored as 50
+  let DODGE_PER_DEXTERITY : Nat = 50;  // 0.5% per point
+  let CRIT_PER_DEXTERITY : Nat = 20;   // 0.2% per point
+
+  // Create initial base stats for a new character
+  private func createInitialBaseStats() : Types.BaseStats {
+    {
+      level = 1;
+      baseHp = BASE_HP;
+      baseMp = BASE_MP;
+      basePhysicalAttack = BASE_PHYSICAL_ATTACK;
+      basePhysicalDefense = BASE_PHYSICAL_DEFENSE;
+      baseMagicAttack = BASE_MAGIC_ATTACK;
+      baseMagicDefense = BASE_MAGIC_DEFENSE;
+      baseAttackSpeed = BASE_ATTACK_SPEED;
+      strength = 1;
+      dexterity = 1;
+      constitution = 1;
+      intelligence = 1;
+      wisdom = 1;
+      maxHp = BASE_HP + HP_PER_CONSTITUTION;
+      maxMp = BASE_MP + MP_PER_INTELLIGENCE + MP_PER_WISDOM;
+      physicalAttack = BASE_PHYSICAL_ATTACK + ATTACK_PER_STRENGTH;
+      physicalDefense = BASE_PHYSICAL_DEFENSE + 1;
+      magicAttack = BASE_MAGIC_ATTACK + 2;
+      magicDefense = BASE_MAGIC_DEFENSE + 2;
+      attackSpeed = BASE_ATTACK_SPEED + SPEED_PER_DEXTERITY;
+      dodgeChance = DODGE_PER_DEXTERITY;
+      criticalChance = BASE_CRIT_CHANCE + CRIT_PER_DEXTERITY;
+    }
+  };
+
   // Message log functions
   private func ensureMessageLog(state: MudState, p: Principal) {
     switch (state.messageLogs.get(p)) {
@@ -432,43 +487,31 @@ module {
             state.players.put(caller, name);
             state.usedNames.put(name, caller);
             
-            // Create character stats for the new player
-            let baseStats : Types.BaseStats = {
-              level = 1;
-              maxHp = 100;
-              maxMp = 100;
-            };
-            
-            let dynamicStats : Types.DynamicStats = {
-              hp = 100;
-              mp = 100;
-              xp = 0;
-              isDead = false;
-              deathTime = null;
-            };
-
-            state.playerBaseStats.put(caller, baseStats);
-            state.playerDynamicStats.put(caller, dynamicStats);
-            
-            // Add welcome message to player's log
-            addMessageToLog(state, caller, "Welcome to the game, " # name # "! Your character has been created with starting stats.");
-            
-            // Place player in starting room (room 0) if it exists
-            switch (state.rooms.get(starting_room)) {
-              case (?room) {
-                state.playerLocations.put(caller, starting_room);
+            // Create character stats
+            switch (createCharacter(state, caller)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                // Add welcome message to player's log
+                addMessageToLog(state, caller, "Welcome to the game, " # name # "! Your character has been created with starting stats.");
                 
-                // Broadcast entry message to non-offline players
-                let players = getAllPlayersInRoom(state, starting_room);
-                broadcastToPlayers(state, players, name # " has entered the game", ?caller);
-                
-                // Show other players in the room
-                showPlayersInRoom(state, starting_room, caller);
-                
-                return #ok("Successfully registered as " # name # " and entered the starting room");
-              };
-              case null {
-                return #ok("Successfully registered as " # name # " (no starting room available)");
+                // Place player in starting room (room 0) if it exists
+                switch (state.rooms.get(starting_room)) {
+                  case (?room) {
+                    state.playerLocations.put(caller, starting_room);
+                    
+                    // Broadcast entry message to non-offline players
+                    let players = getAllPlayersInRoom(state, starting_room);
+                    broadcastToPlayers(state, players, name # " has entered the game", ?caller);
+                    
+                    // Show other players in the room
+                    showPlayersInRoom(state, starting_room, caller);
+                    
+                    return #ok("Successfully registered as " # name # " and entered the starting room");
+                  };
+                  case null {
+                    return #ok("Successfully registered as " # name # " (no starting room available)");
+                  };
+                };
               };
             };
           };
@@ -854,16 +897,11 @@ module {
     switch (state.playerBaseStats.get(caller)) {
       case (?_) { #err("You already have a character") };
       case null {
-        // Create base stats
-        let baseStats : Types.BaseStats = {
-          level = 1;
-          maxHp = 100;
-          maxMp = 100;
-        };
+        let baseStats = createInitialBaseStats();
         
         let dynamicStats : Types.DynamicStats = {
-          hp = 100;
-          mp = 100;
+          hp = baseStats.maxHp;
+          mp = baseStats.maxMp;
           xp = 0;
           isDead = false;
           deathTime = null;

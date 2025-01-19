@@ -102,20 +102,42 @@ module {
     is_open : Bool;
   };
 
-  // Stats that change frequently (HP, MP, XP)
+  // Stats that change frequently
   public type DynamicStats = {
     hp: Nat;
     mp: Nat;
     xp: Nat;
     isDead: Bool;
-    deathTime: ?Int;  // Time of death, used for respawn timing
+    deathTime: ?Int;
   };
 
-  // Stats that change rarely (level, max values)
+  // Stats that change rarely
   public type BaseStats = {
     level: Nat;
+    // Base values
+    baseHp: Nat;
+    baseMp: Nat;
+    basePhysicalAttack: Nat;
+    basePhysicalDefense: Nat;
+    baseMagicAttack: Nat;
+    baseMagicDefense: Nat;
+    baseAttackSpeed: Nat;  // Stored as percentage * 100 for integer math
+    // Primary attributes
+    strength: Nat;
+    dexterity: Nat;
+    constitution: Nat;
+    intelligence: Nat;
+    wisdom: Nat;
+    // Derived maximums (cached for efficiency)
     maxHp: Nat;
     maxMp: Nat;
+    physicalAttack: Nat;
+    physicalDefense: Nat;
+    magicAttack: Nat;
+    magicDefense: Nat;
+    attackSpeed: Nat;     // Stored as percentage * 100
+    dodgeChance: Nat;     // Stored as percentage * 100
+    criticalChance: Nat;  // Stored as percentage * 100
   };
 
   // Combined player stats for queries
