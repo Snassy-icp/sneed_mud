@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react';
 import { AuthClient } from "@dfinity/auth-client";
 import { Actor, HttpAgent } from "@dfinity/agent";
 import { Principal } from '@dfinity/principal';
-import { idlFactory } from "declarations/sneed_mud_backend/sneed_mud_backend.did.js";
+import { idlFactory as mainIdlFactory } from "declarations/sneed_mud_backend/sneed_mud_backend.did.js";
+import { idlFactory as stagingIdlFactory } from "declarations/sneed_mud_backend_staging/sneed_mud_backend_staging.did.js";
+import config from '../config.json';
+
+const isStaging = config.environment === 'staging';
+const idlFactory = isStaging ? stagingIdlFactory : mainIdlFactory;
 
 export function useAuth() {
   const [isLoading, setIsLoading] = useState(true);

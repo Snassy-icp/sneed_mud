@@ -4,7 +4,8 @@ import { sneed_mud_backend } from 'declarations/sneed_mud_backend';
 import { AuthClient } from "@dfinity/auth-client";
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from "@dfinity/agent";
-import { idlFactory } from "declarations/sneed_mud_backend/sneed_mud_backend.did.js";
+import { idlFactory as mainIdlFactory } from "declarations/sneed_mud_backend/sneed_mud_backend.did.js";
+import { idlFactory as stagingIdlFactory } from "declarations/sneed_mud_backend_staging/sneed_mud_backend_staging.did.js";
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import CharacterRegistrationPage from './pages/CharacterRegistrationPage';
@@ -14,6 +15,7 @@ import config from './config.json';
 // Get the environment from config
 const isStaging = config.environment === 'staging';
 const BACKEND_CANISTER_ID = config.backendCanisterId;
+const idlFactory = isStaging ? stagingIdlFactory : mainIdlFactory;
 
 console.log('Config:', config);
 console.log('Environment detection:', {
