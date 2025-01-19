@@ -1,0 +1,132 @@
+PROPOSED Combat & Stats System Specification
+=====================================
+
+1. Overview
+-----------
+A comprehensive combat system featuring character attributes, equipment effects, status conditions, and tactical decision-making. This system aims to create engaging PvP encounters while maintaining balance.
+
+2. Character Stats
+-----------------
+Primary Attributes:
+- Strength: Affects physical damage and carrying capacity
+- Dexterity: Affects attack speed and dodge chance
+- Constitution: Affects HP and physical defense
+- Intelligence: Affects MP and spell damage
+- Wisdom: Affects MP regeneration and spell resistance
+
+Derived Stats:
+- HP = (Base HP + Constitution * 10)
+- MP = (Base MP + Intelligence * 5 + Wisdom * 3)
+- Physical Attack = (Base + Strength * 2 + Weapon Damage)
+- Physical Defense = (Base + Constitution + Armor Value)
+- Magic Attack = (Base + Intelligence * 2)
+- Magic Defense = (Base + Wisdom * 2)
+- Attack Speed = (Base + Dexterity * 0.5)% 
+- Dodge Chance = (Dexterity * 0.5)%
+- Critical Hit Chance = (Base 5% + Dexterity * 0.2)%
+
+3. Combat Mechanics
+------------------
+Initiative System:
+- Combat rounds based on Attack Speed
+- Higher Attack Speed allows more frequent actions
+- Base round duration: 3 seconds
+- Minimum time between actions: 1 second
+
+Action Types:
+1. Basic Attack
+   - Physical damage based on Physical Attack
+   - Can be dodged or critical hit
+   - 1 second cooldown
+
+2. Special Abilities
+   - Unlocked at specific levels
+   - Consume MP or other resources
+   - Unique effects (stun, bleed, etc.)
+   - Longer cooldowns (5-30 seconds)
+
+3. Defensive Actions
+   - Block: Reduces incoming damage by 50%, 5s cooldown
+   - Dodge: Increased dodge chance for 3s, 8s cooldown
+   - Counter: Return damage when hit, 10s cooldown
+
+Status Effects:
+- Bleeding: DoT physical damage
+- Burning: DoT magical damage
+- Stunned: Cannot take actions
+- Slowed: Reduced Attack Speed
+- Weakened: Reduced damage output
+
+Combat State:
+- Enters combat on attack/being attacked
+- Combat state lasts 15 seconds from last action
+- Leaving combat starts HP/MP regeneration
+- Cannot use certain abilities out of combat
+
+4. Equipment & Items
+-------------------
+Weapon Types:
+- One-handed: Balanced stats, allows shield
+- Two-handed: Higher damage, no shield
+- Ranged: Distance attacks, lower defense
+- Magic: Enhances spell damage
+
+Armor Types:
+- Light: High dodge, low defense
+- Medium: Balanced stats
+- Heavy: High defense, lower dodge
+
+Equipment Stats:
+- Base damage/defense values
+- Attribute bonuses
+- Special effects
+- Set bonuses
+
+5. Experience & Progression
+--------------------------
+XP Gain:
+- Base XP = Victim's Level * 15
+- Bonus XP for higher level victims
+- Group combat splits XP based on contribution
+
+Level Benefits:
+- Attribute points: 3 per level
+- New abilities every 5 levels
+- Increased base stats
+- Equipment requirements
+
+6. Death & Respawn
+-----------------
+Death Mechanics:
+- Die at 0 HP
+- 50% XP penalty for next 30 minutes
+- Drop non-bound items
+- Cannot be attacked while dead
+
+Respawn Options:
+- Auto-respawn after 60 seconds
+- Manual respawn at any time
+- Respawn at nearest safe point
+- Full HP/MP on respawn
+
+7. Constants & Formulas
+----------------------
+Combat Timings:
+- Base Round: 3 seconds
+- Combat Duration: 15 seconds
+- Global Cooldown: 1 second
+
+Damage Formula:
+Physical Damage = (Attack * (100 / (100 + Defense))) * (1 + Critical)
+Magical Damage = (Magic Attack * (100 / (100 + Magic Defense)))
+
+8. Edge Cases & Restrictions
+--------------------------
+- Maximum attribute values: 100 per stat
+- Dodge/Crit cap: 75%
+- Cannot attack while trading/banking
+- PvP level restrictions (±5 levels)
+- Anti-camping mechanics
+- Diminishing returns on crowd control
+
+Note: This is a draft proposal for discussion and refinement. All values and mechanics are subject to adjustment based on feedback and testing. 
