@@ -8,35 +8,6 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
   const [registrationError, setRegistrationError] = useState(null);
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
 
-  if (!principal) {
-    return <Navigate to="/" replace />;
-  }
-
-  useEffect(() => {
-    async function checkName() {
-      try {
-        const principalObj = Principal.fromText(principal);
-        const nameOpt = await authenticatedActor.getPlayerName(principalObj);
-        if (Array.isArray(nameOpt) && nameOpt.length > 0) {
-          setHasName(true);
-          onNameSet(nameOpt[0]);
-        }
-      } catch (error) {
-        console.error("Error checking name:", error);
-      }
-      setCheckingName(false);
-    }
-    checkName();
-  }, [principal, authenticatedActor, onNameSet]);
-
-  if (checkingName) {
-    return <div>Checking registration status...</div>;
-  }
-
-  if (hasName) {
-    return <Navigate to="/game" replace />;
-  }
-
   async function handleNameRegistration(event) {
     event.preventDefault();
     setRegistrationError(null);
@@ -54,6 +25,37 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
     } catch (error) {
       setRegistrationError("Failed to register name: " + error.message);
     }
+  }
+
+  useEffect(() => {
+    async function checkName() {
+      try {
+        const principalObj = Principal.fromText(principal);
+        const nameOpt = await authenticatedActor.getPlayerName(principalObj);
+        if (Array.isArray(nameOpt) && nameOpt.length > 0) {
+          setHasName(true);
+          onNameSet(nameOpt[0]);
+        }
+      } catch (error) {
+        console.error("Error checking name:", error);
+      }
+      setCheckingName(false);
+    }
+    if (principal) {
+      checkName();
+    }
+  }, [principal, authenticatedActor, onNameSet]);
+
+  if (!principal) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (checkingName) {
+    return <div>Checking registration status...</div>;
+  }
+
+  if (hasName) {
+    return <Navigate to="/game" replace />;
   }
 
   if (registrationSuccess) {
