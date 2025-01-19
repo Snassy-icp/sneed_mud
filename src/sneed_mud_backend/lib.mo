@@ -160,6 +160,9 @@ module {
       return #err("Only realm owners can create rooms");
     };
 
+    // Update activity timestamp
+    State.updatePlayerActivity(state, caller);
+
     let roomId = state.stable_state.nextRoomId;
     state.stable_state.nextRoomId += 1;
 
@@ -183,6 +186,9 @@ module {
           return #err("You don't have permission to modify this room");
         };
 
+        // Update activity timestamp
+        State.updatePlayerActivity(state, caller);
+
         let updatedRoom : Room = {
           id = room.id;
           name = name;
@@ -201,8 +207,11 @@ module {
       case null { #err("Room not found") };
       case (?room) {
         if (not State.hasRoomAccess(state, room, caller)) {
-          return #err("You don't have permission to modify this room's ownership");
+          return #err("You don't have permission to modify this room");
         };
+
+        // Update activity timestamp
+        State.updatePlayerActivity(state, caller);
 
         // Check if already an owner
         for (owner in room.owners.vals()) {
@@ -236,8 +245,11 @@ module {
       case null { #err("Room not found") };
       case (?room) {
         if (not State.hasRoomAccess(state, room, caller)) {
-          return #err("You don't have permission to modify this room's ownership");
+          return #err("You don't have permission to modify this room");
         };
+
+        // Update activity timestamp
+        State.updatePlayerActivity(state, caller);
 
         // Prevent removing the last owner
         if (room.owners.size() <= 1) {
@@ -288,6 +300,9 @@ module {
         if (not State.hasRoomAccess(state, room, caller)) {
           return #err("You don't have permission to modify exits in this room");
         };
+
+        // Update activity timestamp
+        State.updatePlayerActivity(state, caller);
 
         switch (state.rooms.get(targetRoomId)) {
           case null { #err("Target room not found") };
@@ -348,6 +363,9 @@ module {
         if (not State.hasRoomAccess(state, room, caller)) {
           return #err("You don't have permission to add exits to this room");
         };
+
+        // Update activity timestamp
+        State.updatePlayerActivity(state, caller);
 
         switch (state.rooms.get(targetRoomId)) {
           case null { #err("Target room not found") };
@@ -797,46 +815,51 @@ module {
 
   // Character creation and stats functions
   public func createCharacter(state: MudState, caller: Principal) : Result.Result<(), Text> {
-    // Check if character already exists
+    // Update activity timestamp
+    State.updatePlayerActivity(state, caller);
+
+    // Check if player already has stats
     switch (state.playerBaseStats.get(caller)) {
-      case (?_) { #err("Character already exists") };
+      case (?_) { #err("You already have a character") };
       case null {
-        // Check if player is registered
-        switch (state.players.get(caller)) {
-          case null { #err("You need to register a name first using /register <name>") };
-          case (?playerName) {
-            // Initialize base stats
-            let baseStats : Types.BaseStats = {
-              level = 1;
-              maxHp = 100;
-              maxMp = 100;
-            };
-            
-            // Initialize dynamic stats
-            let dynamicStats : Types.DynamicStats = {
-              hp = 100;
-              mp = 100;
-              xp = 0;
-            };
+        // Create base stats
+        let baseStats : Types.BaseStats = {
+          level = 1;
+          maxHp = 100;
+          maxMp = 100;
+        };
+        
+        let dynamicStats : Types.DynamicStats = {
+          hp = 100;
+          mp = 100;
+          xp = 0;
+        };
 
-            state.playerBaseStats.put(caller, baseStats);
-            state.playerDynamicStats.put(caller, dynamicStats);
-
-            // Notify the player
-            addMessageToLog(state, caller, "Character created! Use /stats to view your stats.");
-            #ok(())
-          };
-        }
+        state.playerBaseStats.put(caller, baseStats);
+        state.playerDynamicStats.put(caller, dynamicStats);
+        #ok(())
       };
     }
   };
 
   public func getPlayerStats(state: MudState, caller: Principal) : Result.Result<Types.PlayerStats, Text> {
-    switch (state.playerBaseStats.get(caller), state.playerDynamicStats.get(caller)) {
-      case (?base, ?dynamic) {
-        #ok({ base = base; dynamic = dynamic; })
+    // Update activity timestamp
+    State.updatePlayerActivity(state, caller);
+
+    switch (state.playerBaseStats.get(caller)) {
+      case null { #err("No character found") };
+      case (?baseStats) {
+        switch (state.playerDynamicStats.get(caller)) {
+          case null { #err("No character found") };
+          case (?dynamicStats) {
+            let stats : Types.PlayerStats = {
+              base = baseStats;
+              dynamic = dynamicStats;
+            };
+            #ok(stats)
+          };
+        };
       };
-      case (_, _) { #err("Character not found. Use /create to create a character.") };
     }
   };
 
@@ -852,7 +875,7 @@ module {
   };
 
   public func formatPlayerStatsForOthers(stats: Types.PlayerStats) : Text {
-    "Level " # Nat.toText(stats.base.level) # "\n" #
+    "Level " # Nat.toText(stats.base.level) # " character\n" #
     "HP: " # Nat.toText(stats.dynamic.hp) # "/" # Nat.toText(stats.base.maxHp) # "\n" #
     "MP: " # Nat.toText(stats.dynamic.mp) # "/" # Nat.toText(stats.base.maxMp)
   };

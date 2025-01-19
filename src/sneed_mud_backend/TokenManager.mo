@@ -39,6 +39,9 @@ module {
     ledgerCanisterId: Principal,
     metadata: Types.TokenMetadata
   ) : Result.Result<(), Text> {
+    // Update activity timestamp
+    State.updatePlayerActivity(state, caller);
+
     // Update shared metadata cache
     state.metadataCache.put(ledgerCanisterId, metadata);
 
@@ -71,8 +74,12 @@ module {
     caller: Principal,
     ledgerCanisterId: Principal
   ) : Result.Result<(), Text> {
+    // Update activity timestamp
+    State.updatePlayerActivity(state, caller);
+
+    // Get user's registered tokens
     switch (state.registeredTokens.get(caller)) {
-      case null { #err("No registered tokens found") };
+      case null { #err("No tokens registered") };
       case (?tokens) {
         let updatedTokens = Array.filter(tokens, func(t: Principal) : Bool {
           not Principal.equal(t, ledgerCanisterId)
