@@ -1,13 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
+import { Principal } from '@dfinity/principal';
 
-function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet }) {
+function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, onLogout }) {
+  const [checkingName, setCheckingName] = useState(true);
+  const [hasName, setHasName] = useState(false);
+  const [registrationError, setRegistrationError] = useState(null);
+  const [registrationSuccess, setRegistrationSuccess] = useState(null);
+
   if (!principal) {
     return <Navigate to="/" replace />;
   }
 
-  const [registrationError, setRegistrationError] = useState(null);
-  const [registrationSuccess, setRegistrationSuccess] = useState(null);
+  useEffect(() => {
+    async function checkName() {
+      try {
+        const principalObj = Principal.fromText(principal);
+        const nameOpt = await authenticatedActor.getPlayerName(principalObj);
+        if (Array.isArray(nameOpt) && nameOpt.length > 0) {
+          setHasName(true);
+          onNameSet(nameOpt[0]);
+        }
+      } catch (error) {
+        console.error("Error checking name:", error);
+      }
+      setCheckingName(false);
+    }
+    checkName();
+  }, [principal, authenticatedActor, onNameSet]);
+
+  if (checkingName) {
+    return <div>Checking registration status...</div>;
+  }
+
+  if (hasName) {
+    return <Navigate to="/game" replace />;
+  }
 
   async function handleNameRegistration(event) {
     event.preventDefault();
@@ -20,7 +48,6 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet })
       if ('ok' in result) {
         setRegistrationSuccess(result.ok);
         onNameSet(name);
-        return <Navigate to="/game" replace />;
       } else if ('err' in result) {
         setRegistrationError(result.err);
       }

@@ -245,6 +245,7 @@ function App() {
               authenticatedActor={authenticatedActor}
               principal={principal}
               onNameSet={setPlayerName}
+              onLogout={logout}
             />
           } />
           <Route path="/game" element={

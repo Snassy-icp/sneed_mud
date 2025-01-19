@@ -14,7 +14,10 @@ function Header({ isAuthenticated, playerName, onLogout }) {
                 <button onClick={onLogout}>Logout</button>
               </>
             ) : (
-              <Link to="/register">Register Character</Link>
+              <>
+                <Link to="/register">Register Character</Link>
+                <button onClick={onLogout}>Logout</button>
+              </>
             )}
           </nav>
         )}
