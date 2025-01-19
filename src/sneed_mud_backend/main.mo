@@ -418,10 +418,20 @@ actor class MudBackend() = this {
                                 Nat.toText(result.damage) # " damage! " # targetName # 
                                 " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
 
-                    // Broadcast to room
-                    Lib.broadcastToRoom(state, attackerRoom, message);
+                    // Add death message if target died
+                    let finalMessage = if (result.targetDied) {
+                      message # "\n" # targetName # " has been slain!";
+                    } else {
+                      message
+                    };
 
-                    #ok(message)
+                    // Broadcast to room
+                    Lib.broadcastToRoom(state, attackerRoom, finalMessage);
+
+                    // Check for respawns
+                    Combat.checkAndHandleRespawn(state, targetPrincipal);
+
+                    #ok(finalMessage)
                   };
                 }
               };

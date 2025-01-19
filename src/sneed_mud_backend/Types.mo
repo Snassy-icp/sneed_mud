@@ -107,6 +107,8 @@ module {
     hp: Nat;
     mp: Nat;
     xp: Nat;
+    isDead: Bool;
+    deathTime: ?Int;  // Time of death, used for respawn timing
   };
 
   // Stats that change rarely (level, max values)
@@ -154,6 +156,7 @@ module {
     attackerNewHp: Nat;
     targetNewHp: Nat;
     counterDamage: ?Nat;   // Only present for NPC counter-attacks
+    targetDied: Bool;      // Whether the target died from this attack
   };
 
   // Stable state for token registrations

@@ -443,6 +443,8 @@ module {
               hp = 100;
               mp = 100;
               xp = 0;
+              isDead = false;
+              deathTime = null;
             };
 
             state.playerBaseStats.put(caller, baseStats);
@@ -833,6 +835,8 @@ module {
           hp = 100;
           mp = 100;
           xp = 0;
+          isDead = false;
+          deathTime = null;
         };
 
         state.playerBaseStats.put(caller, baseStats);
