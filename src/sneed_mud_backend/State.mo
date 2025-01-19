@@ -130,14 +130,14 @@ module {
 
     let playerBaseStats = HashMap.fromIter<Principal, Types.BaseStats>(
       stable_state.stablePlayerBaseStats.vals(),
-      0,
+      10,
       Principal.equal,
       Principal.hash
     );
 
     let playerDynamicStats = HashMap.fromIter<Principal, Types.DynamicStats>(
       stable_state.stablePlayerDynamicStats.vals(),
-      0,
+      10,
       Principal.equal,
       Principal.hash
     );

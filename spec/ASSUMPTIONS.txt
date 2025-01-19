@@ -25,4 +25,22 @@ Impact:
 - User interface must account for expected delays
 - Game mechanics should feel natural despite these constraints
 - All time-based calculations must be done at the moment of user interaction
-- Systems must be designed around explicit state changes, not continuous updates 
+- Systems must be designed around explicit state changes, not continuous updates
+
+3. Data Formatting and Display Principles
+---------------------------------------
+- Backend sends only structured data, never pre-formatted strings
+- Frontend is responsible for all data formatting and display
+- This separation ensures:
+  * Consistent data structures for programmatic use
+  * Flexible display options (different formats, localizations)
+  * Clear separation of concerns between data and presentation
+  * Easier testing and validation of data structures
+  * Future-proof interface for different display requirements
+
+Impact:
+- All backend responses should use well-defined data structures
+- Text formatting and layout is handled exclusively by frontend
+- Message logs and display text generated from structured data
+- Frontend maintains responsibility for "pretty printing" all data
+- Changes to display format only require frontend updates 

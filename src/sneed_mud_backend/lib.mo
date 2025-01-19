@@ -939,11 +939,37 @@ module {
     let nextLevelXp = State.xpForNextLevel(stats.base.level);
     let xpNeeded = nextLevelXp - stats.dynamic.xp;
     
+    // Basic Info
     "Level: " # Nat.toText(stats.base.level) # "\n" #
+    "XP: " # Nat.toText(stats.dynamic.xp) # "/" # Nat.toText(nextLevelXp) # 
+    " (" # Nat.toText(xpNeeded) # " more needed for next level)\n" #
+    "\n" #
+    // Current Status
     "HP: " # Nat.toText(stats.dynamic.hp) # "/" # Nat.toText(stats.base.maxHp) # "\n" #
     "MP: " # Nat.toText(stats.dynamic.mp) # "/" # Nat.toText(stats.base.maxMp) # "\n" #
-    "XP: " # Nat.toText(stats.dynamic.xp) # "/" # Nat.toText(nextLevelXp) # 
-    " (" # Nat.toText(xpNeeded) # " more needed for next level)"
+    "\n" #
+    // Primary Attributes
+    "Strength: " # Nat.toText(stats.base.strength) # "\n" #
+    "Dexterity: " # Nat.toText(stats.base.dexterity) # "\n" #
+    "Constitution: " # Nat.toText(stats.base.constitution) # "\n" #
+    "Intelligence: " # Nat.toText(stats.base.intelligence) # "\n" #
+    "Wisdom: " # Nat.toText(stats.base.wisdom) # "\n" #
+    "\n" #
+    // Combat Stats
+    "Physical Attack: " # Nat.toText(stats.base.physicalAttack) # 
+    " (Base: " # Nat.toText(stats.base.basePhysicalAttack) # ")\n" #
+    "Physical Defense: " # Nat.toText(stats.base.physicalDefense) # 
+    " (Base: " # Nat.toText(stats.base.basePhysicalDefense) # ")\n" #
+    "Magic Attack: " # Nat.toText(stats.base.magicAttack) # 
+    " (Base: " # Nat.toText(stats.base.baseMagicAttack) # ")\n" #
+    "Magic Defense: " # Nat.toText(stats.base.magicDefense) # 
+    " (Base: " # Nat.toText(stats.base.baseMagicDefense) # ")\n" #
+    "\n" #
+    // Combat Modifiers
+    "Attack Speed: " # Nat.toText(stats.base.attackSpeed / 100) # "%" #
+    " (Base: " # Nat.toText(stats.base.baseAttackSpeed / 100) # "%)\n" #
+    "Dodge Chance: " # Nat.toText(stats.base.dodgeChance / 100) # "%\n" #
+    "Critical Chance: " # Nat.toText(stats.base.criticalChance / 100) # "%"
   };
 
   public func formatPlayerStatsForOthers(stats: Types.PlayerStats) : Text {
