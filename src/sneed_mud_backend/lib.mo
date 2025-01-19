@@ -437,17 +437,13 @@ module {
             switch (state.rooms.get(starting_room)) {
               case (?room) {
                 state.playerLocations.put(caller, starting_room);
-                broadcastToRoomExcept(state, starting_room, caller, name # " has entered the game");
                 
-                // List other players in the room
-                switch (getPlayersInRoomExcept(state, starting_room, caller)) {
-                  case (#err(e)) { /* Ignore error, just don't show players */ };
-                  case (#ok(otherPlayers)) {
-                    if (otherPlayers.size() > 0) {
-                      addMessageToLog(state, caller, formatPlayerList(state, otherPlayers));
-                    };
-                  };
-                };
+                // Broadcast entry message to non-offline players
+                let players = getAllPlayersInRoom(state, starting_room);
+                broadcastToPlayers(state, players, name # " has entered the game", ?caller);
+                
+                // Show other players in the room
+                showPlayersInRoom(state, starting_room, caller);
                 
                 return #ok("Successfully registered as " # name # " and entered the starting room");
               };
@@ -538,6 +534,41 @@ module {
     }
   };
 
+  // Helper to show players in a room to a specific player
+  private func showPlayersInRoom(state: MudState, roomId: RoomId, observer: Principal) {
+    switch (getPlayersInRoomExcept(state, roomId, observer)) {
+      case (#err(_)) { /* Ignore error */ };
+      case (#ok(otherPlayers)) {
+        if (otherPlayers.size() > 0) {
+          addMessageToLog(state, observer, formatPlayerList(state, otherPlayers));
+        } else {
+          addMessageToLog(state, observer, "You are alone here");
+        };
+      };
+    };
+  };
+
+  // Helper for handling movement messages
+  private func handleMovementMessages(
+    state: MudState,
+    caller: Principal,
+    playerName: Text,
+    fromRoom: Room,
+    toRoom: Room,
+    exitName: Text
+  ) {
+    // Departure messages
+    broadcastToRoomExcept(state, fromRoom.id, caller, playerName # " leaves through " # exitName);
+    addMessageToLog(state, caller, "You leave through " # exitName);
+
+    // Arrival messages
+    broadcastToRoomExcept(state, toRoom.id, caller, playerName # " arrives from " # fromRoom.name);
+    addMessageToLog(state, caller, "You arrive in " # toRoom.name);
+
+    // Show other players in new room
+    showPlayersInRoom(state, toRoom.id, caller);
+  };
+
   public func useExit(state: MudState, caller: Principal, exitId: Text) : Result.Result<Room, Text> {
     // Check if player is registered
     switch (state.players.get(caller)) {
@@ -558,26 +589,11 @@ module {
                 switch (state.rooms.get(exit.targetRoomId)) {
                   case null { return #err("Target room not found") };
                   case (?targetRoom) {
-                    // Send departure messages
-                    broadcastToRoomExcept(state, currentRoom.id, caller, playerName # " leaves through " # exit.name);
-                    addMessageToLog(state, caller, "You leave through " # exit.name);
+                    // Handle all movement-related messages
+                    handleMovementMessages(state, caller, playerName, currentRoom, targetRoom, exit.name);
                     
                     // Move player
                     state.playerLocations.put(caller, exit.targetRoomId);
-                    
-                    // Send arrival messages
-                    broadcastToRoomExcept(state, targetRoom.id, caller, playerName # " arrives from " # currentRoom.name);
-                    addMessageToLog(state, caller, "You arrive in " # targetRoom.name);
-                    
-                    // List other players in the room
-                    switch (getPlayersInRoomExcept(state, targetRoom.id, caller)) {
-                      case (#err(e)) { /* Ignore error, just don't show players */ };
-                      case (#ok(otherPlayers)) {
-                        if (otherPlayers.size() > 0) {
-                          addMessageToLog(state, caller, formatPlayerList(state, otherPlayers));
-                        };
-                      };
-                    };
                     
                     return #ok(targetRoom);
                   };
