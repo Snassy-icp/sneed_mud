@@ -554,6 +554,9 @@ Communication:
   /say <message>, /s <message> - Say something to everyone in the room
   /whisper <player> <message>, /w <player> <message> - Send a private message to a player
 
+Combat:
+  /attack <player> - Attack another player in the same room
+
 Items:
   /inventory, /i - Show your inventory
   /look [target], /l [target] - Look around the room or examine a specific target (item, player, or exit)
@@ -584,6 +587,22 @@ Admin Commands (Realm Owners only):
 
 Help:
   /help, /? - Show this help message`]);
+        return;
+      }
+
+      // Handle attack command
+      if (command.toLowerCase().startsWith('/attack ')) {
+        const targetName = command.substring(command.indexOf(' ') + 1).trim();
+        try {
+          const result = await authenticatedActor.attack(targetName);
+          if ('err' in result) {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+          // Success message comes from backend via message polling
+        } catch (error) {
+          console.error("Error attacking:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
         return;
       }
 

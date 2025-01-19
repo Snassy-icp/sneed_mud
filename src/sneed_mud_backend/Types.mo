@@ -142,6 +142,20 @@ module {
     offline_timeout_ns: Int;  // Time in nanoseconds before a player is considered offline (default 1 hour)
   };
 
+  // Combat system types
+  public type CombatState = {
+    inCombat: Bool;
+    combatEndTime: Int;    // Time when combat state expires
+    lastAttackTime: Int;   // For cooldown tracking
+  };
+
+  public type AttackResult = {
+    damage: Nat;
+    attackerNewHp: Nat;
+    targetNewHp: Nat;
+    counterDamage: ?Nat;   // Only present for NPC counter-attacks
+  };
+
   // Stable state for token registrations
   public type StableTokenRegistrations = [(Principal, [Principal])];  // user -> [ledger canister IDs]
 } 

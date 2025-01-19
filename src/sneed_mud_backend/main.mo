@@ -17,6 +17,8 @@ import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
 import Nat32 "mo:base/Nat32";
 import Nat64 "mo:base/Nat64";
+import Nat "mo:base/Nat";
+import Combat "./Combat";
 
 actor class MudBackend() = this {
   let starting_room : Types.RoomId = 0;
@@ -376,6 +378,56 @@ actor class MudBackend() = this {
             #ok(targetName # "\n" # Lib.formatPlayerStatsForOthers(stats))
           };
         }
+      };
+    }
+  };
+
+  // Combat system
+  public shared(msg) func attack(targetName: Text) : async Result.Result<Text, Text> {
+    // First check if the target exists
+    switch (State.findPrincipalByName(state, targetName)) {
+      case null { #err("Player not found: " # targetName) };
+      case (?targetPrincipal) {
+        // Check if target is in the same room
+        switch (state.playerLocations.get(msg.caller)) {
+          case null { #err("You are not in any room") };
+          case (?attackerRoom) {
+            switch (state.playerLocations.get(targetPrincipal)) {
+              case null { #err("Target is not in any room") };
+              case (?targetRoom) {
+                if (attackerRoom != targetRoom) {
+                  return #err("Target is not in the same room");
+                };
+
+                // Process the attack
+                switch (Combat.processPlayerAttack(state, msg.caller, targetPrincipal)) {
+                  case (#err(e)) { #err(e) };
+                  case (#ok(result)) {
+                    // Get player names for the message
+                    let attackerName = switch (state.players.get(msg.caller)) {
+                      case null { "Unknown" };
+                      case (?name) { name };
+                    };
+                    let targetName = switch (state.players.get(targetPrincipal)) {
+                      case null { "Unknown" };
+                      case (?name) { name };
+                    };
+
+                    // Create combat message
+                    let message = attackerName # " attacks " # targetName # " for " # 
+                                Nat.toText(result.damage) # " damage! " # targetName # 
+                                " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
+
+                    // Broadcast to room
+                    Lib.broadcastToRoom(state, attackerRoom, message);
+
+                    #ok(message)
+                  };
+                }
+              };
+            };
+          };
+        };
       };
     }
   };

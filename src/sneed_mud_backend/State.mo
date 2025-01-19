@@ -47,6 +47,7 @@ module {
     metadataCache: HashMap.HashMap<Principal, Types.TokenMetadata>;
     playerLastActivity: HashMap.HashMap<Principal, Int>;
     var afkConfig: Types.AfkConfig;
+    playerCombatStates: HashMap.HashMap<Principal, Types.CombatState>;
   };
 
   public func initStable() : StableState {
@@ -169,6 +170,7 @@ module {
         afk_timeout_ns = 20 * 60 * 1_000_000_000;
         offline_timeout_ns = 60 * 60 * 1_000_000_000;
       };
+      playerCombatStates = HashMap.HashMap<Principal, Types.CombatState>(10, Principal.equal, Principal.hash);
     }
   };
 
