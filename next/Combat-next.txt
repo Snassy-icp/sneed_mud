@@ -9,12 +9,38 @@ Technical Assumptions
    - State updates and combat actions must account for these latencies
    - All timing values in the specification must respect these technical limitations
 
+2. Backend Architecture Constraints
+- No recurring timer events or game loops exist on the backend
+- All state changes are driven by explicit user actions (button clicks)
+- Backend has no autonomous update mechanisms
+- Time-based mechanics must be calculated based on timestamps at time of user actions
+- IC handles all command queuing and state transaction management natively
+- Frontend maintains a query loop for state updates, but cannot drive backend "ticks"
+
 1. Overview
 -----------
 A comprehensive combat system featuring character attributes, equipment effects, status conditions, and tactical decision-making. This system aims to create engaging PvP encounters while maintaining balance.
 
 2. Character Stats
 -----------------
+Base Values (Level 1):
+- Base HP = 100
+- Base MP = 50
+- Base Physical Attack = 10
+- Base Physical Defense = 5
+- Base Magic Attack = 10
+- Base Magic Defense = 5
+- Base Attack Speed = 100%
+
+Level Scaling:
+- HP per Level: +20
+- MP per Level: +10
+- Physical Attack per Level: +2
+- Physical Defense per Level: +1
+- Magic Attack per Level: +2
+- Magic Defense per Level: +1
+- Attack Speed is not affected by level
+
 Primary Attributes:
 - Strength: Affects physical damage and carrying capacity
 - Dexterity: Affects attack speed and dodge chance
@@ -23,27 +49,31 @@ Primary Attributes:
 - Wisdom: Affects MP regeneration and spell resistance
 
 Derived Stats:
-- HP = (Base HP + Constitution * 10)
-- MP = (Base MP + Intelligence * 5 + Wisdom * 3)
-- Physical Attack = (Base + Strength * 2 + Weapon Damage)
-- Physical Defense = (Base + Constitution + Armor Value)
-- Magic Attack = (Base + Intelligence * 2)
-- Magic Defense = (Base + Wisdom * 2)
-- Attack Speed = (Base + Dexterity * 0.5)% 
+- HP = (Base HP + Level * 20 + Constitution * 10)
+- MP = (Base MP + Level * 10 + Intelligence * 5 + Wisdom * 3)
+- Physical Attack = (Base Physical Attack + Level * 2 + Strength * 2 + Weapon Damage)
+- Physical Defense = (Base Physical Defense + Level * 1 + Constitution + Armor Value)
+- Magic Attack = (Base Magic Attack + Level * 2 + Intelligence * 2)
+- Magic Defense = (Base Magic Defense + Level * 1 + Wisdom * 2)
+- Attack Speed = (Base Attack Speed + Dexterity * 0.5)% 
 - Dodge Chance = (Dexterity * 0.5)%
 - Critical Hit Chance = (Base 5% + Dexterity * 0.2)%
 
 3. Combat Mechanics
 ------------------
-Initiative System:
-- Combat rounds based on Attack Speed
-- Higher Attack Speed allows more frequent actions
-- Base round duration: 5 seconds (system-wide state evaluation interval)
-- Minimum time between actions: 2.5 seconds (global cooldown for all actions)
+Action-Based Combat System:
+- Pure cooldown-based system (no rounds)
+- Each action validates against timestamps
+- Attack Speed directly reduces cooldown durations
+- All calculations performed at time of action
 
-Note: Base round duration represents the fundamental "tick" of the combat system where overall state and effects are evaluated. 
-Minimum time between actions is the global cooldown that applies to ANY player action, ensuring no actions can be performed more 
-frequently than the platform can handle.
+Timing System:
+- Global Cooldown: 2.5s minimum between actions
+- Attack Speed Effect:
+  * 100% speed = normal cooldowns
+  * 150% speed = cooldowns reduced by 33%
+  * Maximum reduction cap: 50% (200% Attack Speed)
+- All cooldowns checked at time of action attempt
 
 Action Types:
 1. Basic Attack
@@ -63,18 +93,62 @@ Action Types:
    - Counter: Return damage when hit, 12s cooldown
 
 Status Effects:
-- Bleeding: DoT physical damage
-- Burning: DoT magical damage
-- Stunned: Cannot take actions
-- Slowed: Reduced Attack Speed
-- Weakened: Reduced damage output
+Each effect stores: {totalEffect, startTime, duration}
+Effects calculated on each relevant action:
+- Bleeding: {damage, startTime, duration} - Physical DoT
+- Burning: {damage, startTime, duration} - Magical DoT
+- Stunned: {startTime, duration} - Action prevention
+- Slowed: {magnitude, startTime, duration} - Speed reduction
+- Weakened: {magnitude, startTime, duration} - Damage reduction
+
+Effect Resolution:
+- Calculate current effect based on time elapsed
+- Apply proportional effect: (elapsed/duration) * totalEffect
+- Update remaining effect values
+- Effects end when duration passed, checked on next action
+- No periodic updates required
 
 Combat State:
 - Enters combat on attack/being attacked
 - Combat state lasts 20 seconds from last action
+- State checked and updated on each action
 - Leaving combat does not start HP/MP regeneration (will use a /rest command for this)
 - Cannot use certain abilities out of combat
 - Cannot use certain other abilities when in combat
+
+State Synchronization:
+- Backend maintains authoritative state
+- Frontend runs query loop (1/sec) for updates
+- Each action validates:
+  * Combat state (via timestamps)
+  * Resource availability
+  * Position/room
+  * Cooldowns
+- Disconnects handled via timestamp expiry
+
+Group Combat:
+1. Party Structure:
+   - Maximum 5 players
+   - Simple membership list
+   - No complex state management
+
+2. Damage Attribution:
+   - Track direct damage contributions
+   - Store {player: damageDealt} map per combat
+   - Calculate shares when combat ends
+   - No ongoing calculations needed
+
+3. Group Bonuses:
+   - Static bonuses based on group size
+   - Calculated at time of relevant actions
+   - +5% stats per additional member
+   - Simple multiplication at time of use
+
+4. XP Distribution:
+   - Calculate once at kill
+   - Based on stored damage contributions
+   - Apply group size bonus
+   - Immediate distribution
 
 4. Equipment & Items
 -------------------
@@ -180,3 +254,123 @@ Options:
 Status: Under review
 
 Note: This is a draft proposal for discussion and refinement. All values and mechanics are subject to adjustment based on feedback and testing. 
+
+IMPLEMENTATION PLAN
+==================
+This plan outlines the steps to transition from current system to proposed specification.
+Each step should be implemented, tested, and stable before proceeding.
+
+Phase 1: Core Stats System
+-------------------------
+1. Implement new Base Values and Level Scaling
+   - Add base value constants
+   - Add level scaling constants
+   - Update stat calculations
+   - Test with existing combat
+
+2. Expand Primary Attributes
+   - Add missing attribute fields
+   - Update existing attribute calculations
+   - Add new derived stats
+   - Test attribute point allocation
+
+3. Update Derived Stats
+   - Implement new formulas
+   - Add Attack Speed modifications
+   - Test stat scaling at different levels
+
+Phase 2: Combat System Modernization
+----------------------------------
+4. Timestamp-Based Combat State
+   - Remove any tick-based logic
+   - Add timestamp tracking to combat state
+   - Update combat state validation
+   - Test combat entry/exit
+
+5. Cooldown System
+   - Implement global cooldown (2.5s)
+   - Add timestamp-based cooldown tracking
+   - Update action validation
+   - Test rapid action attempts
+
+6. Attack Speed Integration
+   - Implement cooldown reduction formula
+   - Add Attack Speed effects
+   - Test with various speed values
+   - Verify maximum reduction cap
+
+Phase 3: Status Effects
+----------------------
+7. Status Effect Foundation
+   - Create new status effect data structure
+   - Add timestamp tracking
+   - Implement effect calculation logic
+   - Test basic duration tracking
+
+8. Effect Types
+   - Implement Bleeding
+   - Implement Burning
+   - Add Stunned state
+   - Add Speed modifications
+   - Test effect stacking
+
+9. Effect Resolution
+   - Add on-action effect calculations
+   - Implement effect cleanup
+   - Test long-duration effects
+   - Verify memory usage
+
+Phase 4: Group Combat
+--------------------
+10. Basic Party System
+    - Implement party data structure
+    - Add party commands
+    - Test party formation/dissolution
+    - Verify size limits
+
+11. Damage Attribution
+    - Add damage tracking per combat
+    - Implement contribution calculation
+    - Test multi-player combat
+    - Verify attribution accuracy
+
+12. Group Bonuses
+    - Add group size bonuses
+    - Implement stat modifications
+    - Test in combat scenarios
+    - Verify bonus stacking
+
+Phase 5: Equipment & Progression
+------------------------------
+13. Equipment System
+    - Update weapon types
+    - Implement armor categories
+    - Add equipment bonuses
+    - Test equipment changes
+
+14. XP System
+    - Implement new XP formula
+    - Add level-up mechanics
+    - Test progression curve
+    - Verify group XP distribution
+
+Phase 6: Polish & Integration
+---------------------------
+15. Frontend Integration
+    - Update query loop
+    - Add cooldown UI
+    - Implement status effect display
+    - Add group UI elements
+
+16. Testing & Balancing
+    - Full system integration testing
+    - Performance testing
+    - Balance adjustments
+    - User acceptance testing
+
+Each step should include:
+- Unit tests
+- Integration tests
+- Performance verification
+- Rollback plan
+- Documentation updates 

@@ -10,8 +10,19 @@ This document lists the core technical assumptions that inform the design of all
 - State updates and combat actions must account for these latencies
 - All timing values in specifications must respect these technical limitations
 
+2. Backend Architecture Constraints
+---------------------------------
+- No recurring timer events or game loops exist on the backend
+- All state changes are driven by explicit user actions (button clicks)
+- Backend has no autonomous update mechanisms
+- Time-based mechanics must be calculated based on timestamps at time of user actions
+- IC handles all command queuing and state transaction management natively
+- Frontend maintains a query loop for state updates, but cannot drive backend "ticks"
+
 Impact:
 - All game systems must be designed with these constraints in mind
 - Timing values in specifications must allow for these latencies
 - User interface must account for expected delays
-- Game mechanics should feel natural despite these constraints 
+- Game mechanics should feel natural despite these constraints
+- All time-based calculations must be done at the moment of user interaction
+- Systems must be designed around explicit state changes, not continuous updates 
