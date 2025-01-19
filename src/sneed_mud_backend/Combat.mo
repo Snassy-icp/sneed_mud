@@ -34,8 +34,8 @@ module {
       case (?stats) {
         // Simple formula: level * 2 + 1
         // Add explicit checks to prevent traps
-        let baseDamage = stats.level * 2;
-        baseDamage + 1
+        let baseDamage = stats.level * 20;
+        baseDamage + 10
       };
     };
   };
@@ -148,6 +148,22 @@ module {
                 };
                 state.playerDynamicStats.put(target, updatedTargetStats);
 
+                // If target died, award XP to attacker
+                if (targetDied) {
+                  let xpGain = switch (state.playerBaseStats.get(target)) {
+                    case null { 10 }; // Base XP if target has no level
+                    case (?targetBase) { targetBase.level * 10 }; // XP based on target's level
+                  };
+                  let updatedAttackerStats = {
+                    hp = attackerStats.hp;
+                    mp = attackerStats.mp;
+                    xp = attackerStats.xp + xpGain;
+                    isDead = attackerStats.isDead;
+                    deathTime = attackerStats.deathTime;
+                  };
+                  state.playerDynamicStats.put(attacker, updatedAttackerStats);
+                };
+
                 // Update combat states
                 let now = Time.now();
                 let combatEndTime = now + COMBAT_DURATION_NS;
@@ -217,9 +233,13 @@ module {
                                 Nat.toText(result.damage) # " damage! " # targetName # 
                                 " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
 
-                    // Add death message if target died
+                    // Add death message and XP gain if target died
                     let finalMessage = if (result.targetDied) {
-                      message # "\n" # targetName # " has been slain!";
+                      let xpGain = switch (state.playerBaseStats.get(targetPrincipal)) {
+                        case null { 10 };
+                        case (?targetBase) { targetBase.level * 10 };
+                      };
+                      message # "\n" # targetName # " has been slain! " # attackerName # " gains " # Nat.toText(xpGain) # " XP!";
                     } else {
                       message
                     };
