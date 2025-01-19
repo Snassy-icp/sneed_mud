@@ -9,6 +9,7 @@ import Iter "mo:base/Iter";
 import BufferUtils "./BufferUtils";
 import Float "mo:base/Float";
 import Int "mo:base/Int";
+import Time "mo:base/Time";
 
 module {
   public type StableState = {
@@ -44,6 +45,8 @@ module {
     playerDynamicStats: HashMap.HashMap<Principal, Types.DynamicStats>;
     registeredTokens: HashMap.HashMap<Principal, [Principal]>;
     metadataCache: HashMap.HashMap<Principal, Types.TokenMetadata>;
+    playerLastActivity: HashMap.HashMap<Principal, Int>;
+    var afkConfig: Types.AfkConfig;
   };
 
   public func initStable() : StableState {
@@ -161,6 +164,11 @@ module {
       playerDynamicStats = playerDynamicStats;
       registeredTokens = registeredTokens;
       metadataCache = metadataCache;
+      playerLastActivity = HashMap.HashMap<Principal, Int>(10, Principal.equal, Principal.hash);
+      var afkConfig = {
+        afk_timeout_ns = 20 * 60 * 1_000_000_000;
+        offline_timeout_ns = 60 * 60 * 1_000_000_000;
+      };
     }
   };
 
@@ -255,5 +263,27 @@ module {
     let level_squared = currentLevel * currentLevel;
     let xp_int = (556 * level_squared) / 10 - (4712 * currentLevel) / 10 + 52565 / 10;
     Int.abs(xp_int)
+  };
+
+  // Helper function to get player status from activity timestamp
+  public func getPlayerStatus(state: MudState, principal: Principal) : {#Online; #Afk; #Offline} {
+    switch (state.playerLastActivity.get(principal)) {
+      case null { #Offline };
+      case (?lastActivity) {
+        let elapsed = Time.now() - lastActivity;
+        if (elapsed >= state.afkConfig.offline_timeout_ns) { #Offline }
+        else if (elapsed >= state.afkConfig.afk_timeout_ns) { #Afk }
+        else { #Online }
+      };
+    };
+  };
+
+  // Helper function to update player activity timestamp
+  public func updatePlayerActivity(state: MudState, principal: Principal) {
+    state.playerLastActivity.put(principal, Time.now());
+  };
+
+  public func findPrincipalByName(state: MudState, name: Text) : ?Principal {
+    state.usedNames.get(name)
   };
 } 

@@ -8,6 +8,7 @@ import Buffer "mo:base/Buffer";
 import Types "./Types";
 import State "./State";
 import BufferUtils "./BufferUtils";
+import Array "mo:base/Array";
 
 module {
   type Room = Types.Room;
@@ -60,20 +61,50 @@ module {
     }
   };
 
-  public func broadcastToRoom(state: MudState, roomId: RoomId, content: Text) {
-    for ((principal, location) in state.playerLocations.entries()) {
-      if (location == roomId) {
-        addMessageToLog(state, principal, content);
+  // Centralized broadcast helper
+  private func broadcastToPlayers(state: MudState, players: [(Principal, Text)], content: Text, excludePrincipal: ?Principal) {
+    for ((principal, _) in players.vals()) {
+      switch (excludePrincipal) {
+        case (?excluded) { 
+          if (principal != excluded) {
+            switch (State.getPlayerStatus(state, principal)) {
+              case (#Offline) { /* Skip offline players */ };
+              case _ { addMessageToLog(state, principal, content) };
+            };
+          };
+        };
+        case null {
+          switch (State.getPlayerStatus(state, principal)) {
+            case (#Offline) { /* Skip offline players */ };
+            case _ { addMessageToLog(state, principal, content) };
+          };
+        };
       };
     };
   };
 
-  public func broadcastToRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal, content: Text) {
+  // Helper to get all players in a room
+  private func getAllPlayersInRoom(state: MudState, roomId: RoomId) : [(Principal, Text)] {
+    let players = Buffer.Buffer<(Principal, Text)>(0);
     for ((principal, location) in state.playerLocations.entries()) {
-      if (location == roomId and principal != excludePrincipal) {
-        addMessageToLog(state, principal, content);
+      if (location == roomId) {
+        switch (state.players.get(principal)) {
+          case (?name) { players.add((principal, name)) };
+          case null {}; // Skip players without names
+        };
       };
     };
+    Buffer.toArray(players)
+  };
+
+  public func broadcastToRoom(state: MudState, roomId: RoomId, content: Text) {
+    let players = getAllPlayersInRoom(state, roomId);
+    broadcastToPlayers(state, players, content, null);
+  };
+
+  public func broadcastToRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal, content: Text) {
+    let players = getAllPlayersInRoom(state, roomId);
+    broadcastToPlayers(state, players, content, ?excludePrincipal);
   };
 
   public func getMessages(state: MudState, caller: Principal, afterId: ?MessageId) : [LogMessage] {
@@ -368,7 +399,7 @@ module {
     };
 
     // Check if name is already taken
-    switch (state.usedNames.get(name)) {
+    switch (State.findPrincipalByName(state, name)) {
       case (?_existingPrincipal) {
         return #err("Name is already taken");
       };
@@ -409,9 +440,13 @@ module {
                 broadcastToRoomExcept(state, starting_room, caller, name # " has entered the game");
                 
                 // List other players in the room
-                let otherPlayers = getPlayersInRoomExcept(state, starting_room, caller);
-                if (otherPlayers.size() > 0) {
-                  addMessageToLog(state, caller, formatPlayerList(otherPlayers));
+                switch (getPlayersInRoomExcept(state, starting_room, caller)) {
+                  case (#err(e)) { /* Ignore error, just don't show players */ };
+                  case (#ok(otherPlayers)) {
+                    if (otherPlayers.size() > 0) {
+                      addMessageToLog(state, caller, formatPlayerList(state, otherPlayers));
+                    };
+                  };
                 };
                 
                 return #ok("Successfully registered as " # name # " and entered the starting room");
@@ -455,37 +490,52 @@ module {
     };
   };
 
-  // Helper function to format a list of players
-  private func formatPlayerList(names: [Text]) : Text {
-    switch (names.size()) {
+  // Helper function to format a list of players with AFK status
+  private func formatPlayerList(state: MudState, players: [(Principal, Text)]) : Text {
+    let formattedNames = Array.map<(Principal, Text), Text>(players, func(entry) {
+      let (principal, name) = entry;
+      switch (State.getPlayerStatus(state, principal)) {
+        case (#Online) { name };
+        case (#Afk) { name # " (AFK)" };
+        case (#Offline) { name # " (Offline)" }; // Should never happen as we filter these out
+      };
+    });
+
+    switch (formattedNames.size()) {
       case 0 { "" };
-      case 1 { names[0] # " is here" };
-      case 2 { names[0] # " and " # names[1] # " are here" };
+      case 1 { formattedNames[0] # " is here" };
+      case 2 { formattedNames[0] # " and " # formattedNames[1] # " are here" };
       case _ {
-        let last = names.size() - 1;
+        let last = formattedNames.size() - 1;
         var result = "";
         var i = 0;
         while (i < last - 1) {
-          result := result # names[i] # ", ";
+          result := result # formattedNames[i] # ", ";
           i += 1;
         };
-        result # names[last - 1] # " and " # names[last] # " are here"
+        result # formattedNames[last - 1] # " and " # formattedNames[last] # " are here"
       };
     };
   };
 
   // Helper function to get list of players in a room except one player
-  private func getPlayersInRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal) : [Text] {
-    let players = Buffer.Buffer<Text>(0);
-    for ((principal, location) in state.playerLocations.entries()) {
-      if (location == roomId and principal != excludePrincipal) {
-        switch (state.players.get(principal)) {
-          case (?name) { players.add(name) };
-          case null {}; // Skip players without names
+  private func getPlayersInRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal) : Result.Result<[(Principal, Text)], Text> {
+    switch (state.rooms.get(roomId)) {
+      case null { #err("Room not found") };
+      case (?_) {
+        let allPlayers = getAllPlayersInRoom(state, roomId);
+        let players = Buffer.Buffer<(Principal, Text)>(0);
+        for ((principal, name) in allPlayers.vals()) {
+          if (principal != excludePrincipal) {
+            switch (State.getPlayerStatus(state, principal)) {
+              case (#Offline) { /* Skip offline players */ };
+              case _ { players.add((principal, name)) };
+            };
+          };
         };
+        #ok(Buffer.toArray(players))
       };
-    };
-    Buffer.toArray(players)
+    }
   };
 
   public func useExit(state: MudState, caller: Principal, exitId: Text) : Result.Result<Room, Text> {
@@ -493,6 +543,9 @@ module {
     switch (state.players.get(caller)) {
       case null { return #err("You need to register a name first") };
       case (?playerName) {
+        // Update player's activity timestamp
+        State.updatePlayerActivity(state, caller);
+
         // Get player's current room
         switch (getCurrentRoom(state, caller)) {
           case (#err(e)) { return #err(e) };
@@ -517,9 +570,13 @@ module {
                     addMessageToLog(state, caller, "You arrive in " # targetRoom.name);
                     
                     // List other players in the room
-                    let otherPlayers = getPlayersInRoomExcept(state, targetRoom.id, caller);
-                    if (otherPlayers.size() > 0) {
-                      addMessageToLog(state, caller, formatPlayerList(otherPlayers));
+                    switch (getPlayersInRoomExcept(state, targetRoom.id, caller)) {
+                      case (#err(e)) { /* Ignore error, just don't show players */ };
+                      case (#ok(otherPlayers)) {
+                        if (otherPlayers.size() > 0) {
+                          addMessageToLog(state, caller, formatPlayerList(state, otherPlayers));
+                        };
+                      };
                     };
                     
                     return #ok(targetRoom);
@@ -538,18 +595,17 @@ module {
     switch (state.rooms.get(roomId)) {
       case null { #err("Room not found") };
       case (?_) {
-        let playersHere = Buffer.Buffer<(Principal, Text)>(0);
-        for ((principal, location) in state.playerLocations.entries()) {
-          if (location == roomId) {
-            switch (state.players.get(principal)) {
-              case (?name) { playersHere.add((principal, name)) };
-              case null {}; // Skip players without names
-            };
+        let allPlayers = getAllPlayersInRoom(state, roomId);
+        let players = Buffer.Buffer<(Principal, Text)>(0);
+        for ((principal, name) in allPlayers.vals()) {
+          switch (State.getPlayerStatus(state, principal)) {
+            case (#Offline) { /* Skip offline players */ };
+            case _ { players.add((principal, name)) };
           };
         };
-        #ok(Buffer.toArray(playersHere))
+        #ok(Buffer.toArray(players))
       };
-    };
+    }
   };
 
   public func clearPlayer(state: MudState, principal: Principal) {
@@ -576,15 +632,15 @@ module {
         switch (state.playerLocations.get(caller)) {
           case null { #err("You're not in any room") };
           case (?roomId) {
+            // Update sender's activity timestamp
+            State.updatePlayerActivity(state, caller);
+
             // Send personalized message to the speaker
             addMessageToLog(state, caller, "You say: " # message);
             
-            // Broadcast to others in the room
-            for ((principal, location) in state.playerLocations.entries()) {
-              if (location == roomId and principal != caller) {
-                addMessageToLog(state, principal, playerName # " says: " # message);
-              };
-            };
+            // Broadcast to others in room
+            let players = getAllPlayersInRoom(state, roomId);
+            broadcastToPlayers(state, players, playerName # " says: " # message, ?caller);
             #ok(())
           };
         };
@@ -595,14 +651,28 @@ module {
   public func whisper(state: MudState, caller: Principal, targetName: Text, message: Text) : Result.Result<(), Text> {
     switch (state.players.get(caller)) {
       case null { #err("You need to register a name first") };
-      case (?playerName) {
-        // Find the target player's principal by their name
-        switch (state.usedNames.get(targetName)) {
-          case null { #err("Player '" # targetName # "' not found") };
+      case (?senderName) {
+        // Find target principal by name
+        switch (State.findPrincipalByName(state, targetName)) {
+          case null { #err("Player not found: " # targetName) };
           case (?targetPrincipal) {
-            // Send personalized messages to both players
+            // Update sender's activity timestamp
+            State.updatePlayerActivity(state, caller);
+
+            // Deliver message to target
+            addMessageToLog(state, targetPrincipal, senderName # " whispers: " # message);
             addMessageToLog(state, caller, "You whisper to " # targetName # ": " # message);
-            addMessageToLog(state, targetPrincipal, playerName # " whispers to you: " # message);
+
+            // Check target's status and send auto-reply if needed
+            switch (State.getPlayerStatus(state, targetPrincipal)) {
+              case (#Online) { /* No auto-reply needed */ };
+              case (#Afk) { 
+                addMessageToLog(state, caller, targetName # " is currently AFK and will see your message later");
+              };
+              case (#Offline) {
+                addMessageToLog(state, caller, targetName # " is currently offline and will see your message later");
+              };
+            };
             #ok(())
           };
         };

@@ -153,8 +153,8 @@ actor class MudBackend() = this {
   };
 
   public query func isNameTaken(name : Text) : async Bool {
-    switch (state.usedNames.get(name)) {
-      case (?_principal) { true };
+    switch (State.findPrincipalByName(state, name)) {
+      case (?_existingPrincipal) { true };
       case null { false };
     }
   };
@@ -366,8 +366,8 @@ actor class MudBackend() = this {
   // Update look command to show player stats
   public shared(msg) func lookAtPlayer(targetName: Text) : async Result.Result<Text, Text> {
     // First check if the target exists
-    switch (state.usedNames.get(targetName)) {
-      case null { #err("Player not found") };
+    switch (State.findPrincipalByName(state, targetName)) {
+      case null { #err("Player not found: " # targetName) };
       case (?targetPrincipal) {
         // Get target's stats
         switch (Lib.getPlayerStats(state, targetPrincipal)) {
@@ -382,7 +382,7 @@ actor class MudBackend() = this {
 
   // Get a player's principal from their name
   public query func getPrincipalByName(name : Text) : async Result.Result<Principal, Text> {
-    switch (state.usedNames.get(name)) {
+    switch (State.findPrincipalByName(state, name)) {
       case null { #err("Player not found") };
       case (?principal) { #ok(principal) };
     }

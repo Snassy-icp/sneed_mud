@@ -136,6 +136,12 @@ module {
     metadata: ?TokenMetadata;  // None if stale or not in cache
   };
 
+  // AFK system types
+  public type AfkConfig = {
+    afk_timeout_ns: Int;     // Time in nanoseconds before a player is considered AFK (default 20 minutes)
+    offline_timeout_ns: Int;  // Time in nanoseconds before a player is considered offline (default 1 hour)
+  };
+
   // Stable state for token registrations
   public type StableTokenRegistrations = [(Principal, [Principal])];  // user -> [ledger canister IDs]
 } 
