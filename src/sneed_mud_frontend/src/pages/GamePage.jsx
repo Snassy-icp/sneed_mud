@@ -629,6 +629,7 @@ Admin Commands (Realm Owners only):
   /create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"] - Create an exit in current room
   /create_item_type "Name", "Description", is_container, container_capacity, "icon_url", stack_max - Create a new item type
   /create_item "Item Name"|type_id [count] - Create a new item
+  /create_class "Name", "Description" - Create a new character class
 
 Help:
   /help, /? - Show this help message`]);
@@ -1489,6 +1490,36 @@ Help:
           }
         } catch (e) {
           setMessages(prev => [...prev, `Error refreshing token metadata: ${e.message}`]);
+        }
+        return;
+      }
+
+      // Handle create_class command
+      if (command.toLowerCase().startsWith('/create_class ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: "Name", "Description"
+          const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"$/);
+          if (!matches) {
+            setMessages(prev => [...prev, 'Error: Create class command format is \'/create_class "Class Name", "Class Description"\'']);
+            return;
+          }
+          
+          const [_, name, description] = matches;
+          try {
+            const result = await authenticatedActor.createCharacterClass(name, description);
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            } else {
+              setMessages(prev => [...prev, `Successfully created character class "${name}"`]);
+            }
+          } catch (error) {
+            console.error("Error creating character class:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, 'Error: Create class command format is \'/create_class "Class Name", "Class Description"\'']);
         }
         return;
       }
