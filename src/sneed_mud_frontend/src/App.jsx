@@ -164,6 +164,13 @@ function App() {
   }
 
   async function logout() {
+    if (authenticatedActor) {
+      try {
+        await authenticatedActor.logout();
+      } catch (error) {
+        console.error("Error during logout:", error);
+      }
+    }
     await authClient?.logout();
     setPrincipal(null);
     setPlayerName(null);

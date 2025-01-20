@@ -558,4 +558,65 @@ actor class MudBackend() = this {
   public shared(msg) func showCharacterClass(characterClassName: Text) : async Result.Result<Types.CharacterClass, Text> {
     Lib.showCharacterClass(state, characterClassName)
   };
+
+  // AFK management
+  public shared(msg) func setAfk(message: Text) : async Result.Result<(), Text> {
+    switch (state.players.get(msg.caller)) {
+      case null { #err("You need to register a name first") };
+      case (?playerName) {
+        State.setPlayerStatus(state, msg.caller, #Afk);
+        
+        // Broadcast AFK message to current room
+        switch (state.playerLocations.get(msg.caller)) {
+          case (?roomId) {
+            let afkMsg = if (message == "") {
+              playerName # " has gone AFK"
+            } else {
+              playerName # " has gone AFK: " # message
+            };
+            Lib.broadcastToRoom(state, roomId, afkMsg);
+          };
+          case null {};
+        };
+        #ok(())
+      };
+    }
+  };
+
+  public shared(msg) func returnFromAfk() : async Result.Result<(), Text> {
+    switch (state.players.get(msg.caller)) {
+      case null { #err("You need to register a name first") };
+      case (?playerName) {
+        State.setPlayerStatus(state, msg.caller, #Online);
+        State.updatePlayerActivity(state, msg.caller);
+        
+        // Broadcast return message to current room
+        switch (state.playerLocations.get(msg.caller)) {
+          case (?roomId) {
+            Lib.broadcastToRoom(state, roomId, playerName # " is no longer AFK");
+          };
+          case null {};
+        };
+        #ok(())
+      };
+    }
+  };
+
+  public shared(msg) func logout() : async Result.Result<(), Text> {
+    switch (state.players.get(msg.caller)) {
+      case null { #err("You need to register a name first") };
+      case (?playerName) {
+        State.setPlayerStatus(state, msg.caller, #Offline);
+        
+        // Broadcast logout message to current room
+        switch (state.playerLocations.get(msg.caller)) {
+          case (?roomId) {
+            Lib.broadcastToRoom(state, roomId, playerName # " has logged out");
+          };
+          case null {};
+        };
+        #ok(())
+      };
+    }
+  };
 }

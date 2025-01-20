@@ -56,6 +56,7 @@ module {
     playerCombatStates: HashMap.HashMap<Principal, Types.CombatState>;
     characterClasses: HashMap.HashMap<Text, Types.CharacterClass>;
     var adminCharacterClass: ?Types.CharacterClass;
+    playerStatus: HashMap.HashMap<Principal, Types.PlayerStatus>;
   };
 
   public func initStable() : StableState {
@@ -190,6 +191,7 @@ module {
       playerCombatStates = HashMap.HashMap<Principal, Types.CombatState>(10, Principal.equal, Principal.hash);
       characterClasses = characterClasses;
       var adminCharacterClass = stable_state.stableAdminCharacterClass;
+      playerStatus = HashMap.HashMap<Principal, Types.PlayerStatus>(10, Principal.equal, Principal.hash);
     }
   };
 
@@ -288,22 +290,48 @@ module {
     100 * (level * (level - 1) / 2)
   };
 
-  // Helper function to get player status from activity timestamp
-  public func getPlayerStatus(state: MudState, principal: Principal) : {#Online; #Afk; #Offline} {
+  // Set player status explicitly
+  public func setPlayerStatus(state: MudState, principal: Principal, status: Types.PlayerStatus) {
+    state.playerStatus.put(principal, status);
+  };
+
+  // Get current status, considering both stored status and activity timestamps
+  public func getPlayerStatus(state: MudState, principal: Principal) : Types.PlayerStatus {
     switch (state.playerLastActivity.get(principal)) {
       case null { #Offline };
       case (?lastActivity) {
         let elapsed = Time.now() - lastActivity;
-        if (elapsed >= state.afkConfig.offline_timeout_ns) { #Offline }
-        else if (elapsed >= state.afkConfig.afk_timeout_ns) { #Afk }
-        else { #Online }
+        
+        // Check timestamps first
+        if (elapsed >= state.afkConfig.offline_timeout_ns) { 
+          return #Offline;
+        };
+        
+        if (elapsed >= state.afkConfig.afk_timeout_ns) {
+          return #Afk;
+        };
+
+        // If within timeouts, return stored status or default to Online
+        switch (state.playerStatus.get(principal)) {
+          case (?status) { status };
+          case null { #Online };
+        };
       };
     };
   };
 
-  // Helper function to update player activity timestamp
+  // Update player activity and handle status changes
   public func updatePlayerActivity(state: MudState, principal: Principal) {
+    let oldStatus = getPlayerStatus(state, principal);
     state.playerLastActivity.put(principal, Time.now());
+    
+    // Auto-return from AFK when there's activity
+    switch (oldStatus) {
+      case (#Afk) { 
+        setPlayerStatus(state, principal, #Online);
+      };
+      case _ {};
+    };
   };
 
   public func findPrincipalByName(state: MudState, name: Text) : ?Principal {

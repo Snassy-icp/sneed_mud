@@ -234,4 +234,7 @@ module {
     magicDefensePerWis: Nat;   // Magic defense bonus per Wisdom
     attackSpeedPerDex: Nat;    // Attack speed bonus per Dexterity
   };
+
+  // Player status types
+  public type PlayerStatus = {#Online; #Offline; #Afk};
 } 

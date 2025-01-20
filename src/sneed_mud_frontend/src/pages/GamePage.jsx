@@ -1633,6 +1633,33 @@ Help:
         return;
       }
 
+      // Handle AFK command
+      if (command.toLowerCase().startsWith('/afk')) {
+        try {
+          const message = command.substring(4).trim(); // Get everything after '/afk'
+          const result = await authenticatedActor.setAfk(message);
+          if ('err' in result) {
+            setMessages(prev => [...prev, result.err]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, "Error setting AFK status: " + error.message]);
+        }
+        return;
+      }
+
+      // Handle back command
+      if (command === '/back') {
+        try {
+          const result = await authenticatedActor.returnFromAfk();
+          if ('err' in result) {
+            setMessages(prev => [...prev, result.err]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, "Error returning from AFK: " + error.message]);
+        }
+        return;
+      }
+
       // If no command matched, show error
       setMessages(prev => [...prev, "Unknown command. Type /help for available commands."]);
     } catch (error) {
