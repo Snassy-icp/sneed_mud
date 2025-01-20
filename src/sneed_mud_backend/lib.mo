@@ -924,6 +924,7 @@ module {
           xp = 0;
           isDead = false;
           deathTime = null;
+          xpPenaltyEndTime = null;
         };
 
         state.playerBaseStats.put(caller, baseStats);
@@ -959,6 +960,82 @@ module {
           };
         };
       };
+    }
+  };
+
+  // Check if a player has leveled up and handle stat increases
+  public func checkAndHandleLevelUp(state: MudState, principal: Principal) : Bool {
+    switch (state.playerBaseStats.get(principal), state.playerDynamicStats.get(principal)) {
+      case (?baseStats, ?dynamicStats) {
+        // Check if XP is enough for next level
+        let nextLevelXp = State.xpForNextLevel(baseStats.level);
+        if (dynamicStats.xp >= nextLevelXp) {
+          // Calculate new stats
+          let newLevel = baseStats.level + 1;
+          let newBaseHp = baseStats.baseHp + 10;  // +10 HP per level
+          let newBaseMp = baseStats.baseMp + 5;   // +5 MP per level
+          let newBasePhysicalAttack = baseStats.basePhysicalAttack + 2;  // +2 attack per level
+          let newBasePhysicalDefense = baseStats.basePhysicalDefense + 2; // +2 defense per level
+          let newBaseMagicAttack = baseStats.baseMagicAttack + 2;
+          let newBaseMagicDefense = baseStats.baseMagicDefense + 2;
+
+          // Create updated base stats
+          let updatedBaseStats : Types.BaseStats = {
+            level = newLevel;
+            // Update base values
+            baseHp = newBaseHp;
+            baseMp = newBaseMp;
+            basePhysicalAttack = newBasePhysicalAttack;
+            basePhysicalDefense = newBasePhysicalDefense;
+            baseMagicAttack = newBaseMagicAttack;
+            baseMagicDefense = newBaseMagicDefense;
+            baseAttackSpeed = baseStats.baseAttackSpeed;
+            // Keep primary attributes unchanged
+            strength = baseStats.strength;
+            dexterity = baseStats.dexterity;
+            constitution = baseStats.constitution;
+            intelligence = baseStats.intelligence;
+            wisdom = baseStats.wisdom;
+            // Recalculate derived stats
+            maxHp = newBaseHp + (baseStats.constitution * 5);
+            maxMp = newBaseMp + (baseStats.wisdom * 3);
+            physicalAttack = newBasePhysicalAttack + (baseStats.strength * 2);
+            physicalDefense = newBasePhysicalDefense + (baseStats.constitution * 2);
+            magicAttack = newBaseMagicAttack + (baseStats.intelligence * 2);
+            magicDefense = newBaseMagicDefense + (baseStats.wisdom * 2);
+            attackSpeed = baseStats.baseAttackSpeed + (baseStats.dexterity * 20);
+            dodgeChance = baseStats.dexterity * 20;
+            criticalChance = baseStats.dexterity * 20;
+          };
+
+          // Update base stats
+          state.playerBaseStats.put(principal, updatedBaseStats);
+
+          // Heal to full on level up
+          let updatedDynamicStats : Types.DynamicStats = {
+            hp = updatedBaseStats.maxHp;
+            mp = updatedBaseStats.maxMp;
+            xp = dynamicStats.xp;
+            isDead = dynamicStats.isDead;
+            deathTime = dynamicStats.deathTime;
+            xpPenaltyEndTime = dynamicStats.xpPenaltyEndTime;
+          };
+          state.playerDynamicStats.put(principal, updatedDynamicStats);
+
+          // Broadcast level up message
+          switch (state.players.get(principal), state.playerLocations.get(principal)) {
+            case (?name, ?roomId) {
+              broadcastToRoom(state, roomId, "*** " # name # " has reached level " # Nat.toText(newLevel) # "! ***");
+            };
+            case _ {};
+          };
+
+          true
+        } else {
+          false
+        };
+      };
+      case _ { false };
     }
   };
 } 

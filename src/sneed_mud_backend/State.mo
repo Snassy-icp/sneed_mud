@@ -259,16 +259,16 @@ module {
 
   // Helper function to calculate XP needed for next level
   public func xpForNextLevel(currentLevel: Nat) : Nat {
-    // Special case for level 1->2
-    if (currentLevel == 1) {
-      return 2000;
-    };
-    
-    // Original formula: 55.6 * (level ^ 2) - (471.2 * level) + 5256.5
-    // Multiplied by 10 to maintain precision with integer math
-    let level_squared = currentLevel * currentLevel;
-    let xp_int = (556 * level_squared) / 10 - (4712 * currentLevel) / 10 + 52565 / 10;
-    Int.abs(xp_int)
+    // Formula: 100 * N^2 where N is the next level
+    let nextLevel = currentLevel + 1;
+    100 * nextLevel * nextLevel
+  };
+
+  // Helper function to calculate total XP needed to reach a level
+  public func totalXpForLevel(level: Nat) : Nat {
+    // Formula: 100 * (N * (N-1) / 2) from the spec
+    if (level <= 1) { return 0 };
+    100 * (level * (level - 1) / 2)
   };
 
   // Helper function to get player status from activity timestamp

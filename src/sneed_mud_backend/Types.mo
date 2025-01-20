@@ -109,6 +109,7 @@ module {
     xp: Nat;
     isDead: Bool;
     deathTime: ?Int;
+    xpPenaltyEndTime: ?Int;  // When null, no XP penalty is active
   };
 
   // Stats that change rarely
@@ -201,5 +202,14 @@ module {
     #Communication;
     #Info;
     #Respawn;
+  };
+
+  // Dynamic stats that change during gameplay
+  public type PlayerDynamicStats = {
+    hp: Nat;
+    mp: Nat;
+    xp: Nat;
+    isDead: Bool;
+    deathTime: ?Int;
   };
 } 

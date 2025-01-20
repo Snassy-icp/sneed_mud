@@ -15,6 +15,7 @@ module {
 
   // Constants
   private let RESPAWN_DELAY_NS = 60_000_000_000;   // 60 seconds until auto-respawn
+  private let XP_PENALTY_DURATION_NS = 1_800_000_000_000; // 30 minutes in nanoseconds
   
   // Accuracy thresholds (stored as percentage * 100)
   private let BASE_MISS_THRESHOLD : Nat = 1000;     // 10% chance to miss
@@ -203,12 +204,13 @@ module {
                   case (?base) { base };
                 };
                 
-                let updatedStats = {
+                let updatedStats : Types.DynamicStats = {
                   hp = baseStats.maxHp;
                   mp = stats.mp;
                   xp = stats.xp;
                   isDead = false;
                   deathTime = null;
+                  xpPenaltyEndTime = stats.xpPenaltyEndTime;  // Keep existing penalty
                 };
                 state.playerDynamicStats.put(principal, updatedStats);
                 
@@ -223,6 +225,28 @@ module {
                   };
                 };
               };
+            };
+          };
+        };
+      };
+    };
+  };
+
+  // Calculate XP gain with penalty consideration
+  private func calculateXpGain(state: MudState, attacker: Principal, targetLevel: Nat) : Nat {
+    let baseXp = targetLevel * 15;
+    
+    // Check if attacker has XP penalty
+    switch (state.playerDynamicStats.get(attacker)) {
+      case null { baseXp };
+      case (?stats) {
+        switch (stats.xpPenaltyEndTime) {
+          case null { baseXp };
+          case (?endTime) {
+            if (Time.now() >= endTime) {
+              baseXp  // Penalty expired
+            } else {
+              baseXp / 2  // 50% penalty
             };
           };
         };
@@ -260,29 +284,37 @@ module {
                     let targetDied = targetNewHp == 0;
 
                     // Update target's stats
-                    let updatedTargetStats = {
+                    let updatedTargetStats : Types.DynamicStats = {
                       hp = targetNewHp;
                       mp = targetStats.mp;
                       xp = targetStats.xp;
                       isDead = targetDied;
                       deathTime = if (targetDied) { ?Time.now() } else { null };
+                      xpPenaltyEndTime = if (targetDied) { ?(Time.now() + XP_PENALTY_DURATION_NS) } else { targetStats.xpPenaltyEndTime };
                     };
                     state.playerDynamicStats.put(target, updatedTargetStats);
 
                     // If target died, award XP to attacker
                     if (targetDied) {
-                      let xpGain = switch (state.playerBaseStats.get(target)) {
-                        case null { 10 }; // Base XP if target has no level
-                        case (?targetBase) { targetBase.level * 10 }; // XP based on target's level
+                      let targetLevel = switch (state.playerBaseStats.get(target)) {
+                        case null { 1 }; // Base level if no stats
+                        case (?targetBase) { targetBase.level };
                       };
-                      let updatedAttackerStats = {
+                      let xpGain = calculateXpGain(state, attacker, targetLevel);
+                      
+                      // Update attacker's XP
+                      let updatedAttackerStats : Types.DynamicStats = {
                         hp = attackerStats.hp;
                         mp = attackerStats.mp;
                         xp = attackerStats.xp + xpGain;
                         isDead = attackerStats.isDead;
                         deathTime = attackerStats.deathTime;
+                        xpPenaltyEndTime = attackerStats.xpPenaltyEndTime;
                       };
                       state.playerDynamicStats.put(attacker, updatedAttackerStats);
+
+                      // Check for level up
+                      let _ = Lib.checkAndHandleLevelUp(state, attacker);
                     };
 
                     // Update combat states for both players
@@ -387,12 +419,13 @@ module {
                   case null { #err("No character found") };
                   case (?dynamicStats) {
                     // Update player stats
-                    let updatedStats = {
+                    let updatedStats : Types.DynamicStats = {
                       hp = baseStats.maxHp;
                       mp = dynamicStats.mp;
                       xp = dynamicStats.xp;
                       isDead = false;
                       deathTime = null;
+                      xpPenaltyEndTime = dynamicStats.xpPenaltyEndTime;  // Keep existing penalty
                     };
                     state.playerDynamicStats.put(caller, updatedStats);
                     
