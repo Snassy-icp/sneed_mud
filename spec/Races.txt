@@ -1,0 +1,88 @@
+Race System Specification
+=======================
+
+1. Overview
+-----------
+SNEED MUD implements a data-driven race system allowing realm owners to create and customize different playable races. Each race can affect character stats and growth rates, stacking with effects from classes and genders. The system is designed to be flexible and entirely configurable by realm owners.
+
+2. Key Components
+----------------
+- Race Definition
+  * Name and description
+  * Base stats (HP, MP, attack, defense, etc.)
+  * Growth rates per level
+  * No hardcoded racial abilities (all effects through stats)
+
+- Race Management
+  * Realm owner controls
+  * Creation and deletion
+  * Stat modification
+  * Default admin race for bootstrapping
+
+3. Detailed Mechanics
+--------------------
+Race Stats:
+- Base stats affect character creation
+- Stats stack with class and gender bonuses
+- Growth rates affect level-up bonuses
+- All stats must be within valid ranges (1-10000)
+
+Race States:
+- Active: Available for selection
+- Deleted: Removed from selection
+  * Existing characters retain the race
+  * New characters cannot select it
+
+Bootstrapping:
+- System starts with no races defined
+- First realm owner gets "God" race if no others exist
+- "God" race has balanced stats
+- "God" race is hidden once regular races exist
+
+4. Implementation Notes
+----------------------
+- Store races in stable HashMap by name
+- Race names are case-sensitive and unique
+- Admin race stored separately from regular races
+- Race existence checks exclude admin race
+
+5. Commands & Permissions
+------------------------
+Realm Owner Commands:
+- /create_race <name> <description> - Creates new race
+- /update_race <name> <attribute> <value> - Updates race attribute
+- /delete_race <name> - Removes race from selection
+- /list_races - Shows all available races
+- /show_race <name> - Shows detailed race info
+
+Player Commands:
+- /list_races - Shows available races for selection
+- /show_race <name> - Shows detailed race info
+
+6. Edge Cases & Restrictions
+---------------------------
+- Cannot delete race if it would leave no races available
+- Cannot modify "God" race
+- Race deletion doesn't affect existing characters
+- Must have at least one race available for character creation
+- Race names must be unique (case-sensitive)
+- Invalid stat values are rejected
+- Base stats must be within valid ranges
+
+7. Character Creation
+--------------------
+- Race selection required during character creation
+- Selection available via dropdown menu
+- Order suggestion: Race → Gender → Class
+- Cannot be changed after character creation
+- Displayed in character inspection (/look)
+- Stats immediately applied on creation
+
+8. Future Considerations
+-----------------------
+- Race-specific starting locations
+- Race-specific equipment restrictions
+- Race change tokens/mechanics
+- Race-specific quests or content
+- Race population balancing
+- Race relationship systems 

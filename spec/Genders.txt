@@ -1,0 +1,101 @@
+Gender System Specification
+========================
+
+1. Overview
+-----------
+SNEED MUD implements a flexible, data-driven gender system allowing realm owners to define and customize character genders. Each gender can affect character stats and growth rates, stacking with effects from classes and races. The system supports traditional binary genders but allows realm owners to define any number of genders as needed.
+
+2. Key Components
+----------------
+- Gender Definition
+  * Name and description
+  * Base stats (HP, MP, attack, defense, etc.)
+  * Growth rates per level
+  * No hardcoded gender abilities (all effects through stats)
+
+- Gender Management
+  * Realm owner controls
+  * Creation and deletion
+  * Stat modification
+  * Default admin gender for bootstrapping
+  * Helper function for creating traditional binary genders
+
+3. Detailed Mechanics
+--------------------
+Gender Stats:
+- Base stats affect character creation
+- Stats stack with class and race bonuses
+- Growth rates affect level-up bonuses
+- All stats must be within valid ranges (1-10000)
+
+Gender States:
+- Active: Available for selection
+- Deleted: Removed from selection
+  * Existing characters retain the gender
+  * New characters cannot select it
+
+Bootstrapping:
+- System starts with no genders defined
+- First realm owner gets "God" gender if no others exist
+- "God" gender has balanced stats
+- "God" gender is hidden once regular genders exist
+- Helper function available to create balanced male/female defaults
+
+4. Implementation Notes
+----------------------
+- Store genders in stable HashMap by name
+- Gender names are case-sensitive and unique
+- Admin gender stored separately from regular genders
+- Gender existence checks exclude admin gender
+
+5. Commands & Permissions
+------------------------
+Realm Owner Commands:
+- /create_gender <name> <description> - Creates new gender
+- /create_default_genders - Creates balanced male/female genders
+- /update_gender <name> <attribute> <value> - Updates gender attribute
+- /delete_gender <name> - Removes gender from selection
+- /list_genders - Shows all available genders
+- /show_gender <name> - Shows detailed gender info
+
+Player Commands:
+- /list_genders - Shows available genders for selection
+- /show_gender <name> - Shows detailed gender info
+
+6. Edge Cases & Restrictions
+---------------------------
+- Cannot delete gender if it would leave no genders available
+- Cannot modify "God" gender
+- Gender deletion doesn't affect existing characters
+- Must have at least one gender available for character creation
+- Gender names must be unique (case-sensitive)
+- Invalid stat values are rejected
+- Base stats must be within valid ranges
+
+7. Character Creation
+--------------------
+- Gender selection required during character creation
+- Selection available via dropdown menu
+- Order suggestion: Race → Gender → Class
+- Cannot be changed after character creation
+- Displayed in character inspection (/look)
+- Stats immediately applied on creation
+
+8. Default Gender Creation
+-------------------------
+Helper function creates balanced male/female genders:
+- Same base stats for both
+- Same growth rates for both
+- Neutral stat distribution
+- Realm owner can modify after creation
+- Additional genders can be added
+- Default genders can be deleted
+
+9. Future Considerations
+-----------------------
+- Gender-specific equipment
+- Gender-specific quests or content
+- Gender change tokens/mechanics
+- Gender-specific dialogue options
+- Gender-neutral language options
+- Custom pronoun support 
