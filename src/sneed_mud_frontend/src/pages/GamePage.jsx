@@ -189,17 +189,51 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     }
   }
 
-  function formatStats(stats) {
-    const level = Number(stats.base.level);
-    const nextLevelXp = level === 1 ? 2000 : 
-      Math.floor(55.6 * (level ** 2) - (471.2 * level) + 5256.5);
-    const xpNeeded = nextLevelXp - Number(stats.dynamic.xp);
+  const formatStats = (stats) => {
+    const nextLevelXp = calculateXpForNextLevel(stats.base.level);
+    const xpNeeded = nextLevelXp - stats.dynamic.xp;
     
-    return `Level: ${level}\n` +
-           `HP: ${Number(stats.dynamic.hp)}/${Number(stats.base.maxHp)}\n` +
-           `MP: ${Number(stats.dynamic.mp)}/${Number(stats.base.maxMp)}\n` +
-           `XP: ${Number(stats.dynamic.xp)}/${nextLevelXp} (${xpNeeded} more needed for next level)`;
-  }
+    return [
+      // Basic Info
+      `Level: ${stats.base.level}`,
+      `XP: ${stats.dynamic.xp}/${nextLevelXp} (${xpNeeded} more needed for next level)`,
+      '',
+      // Current Status
+      `HP: ${stats.dynamic.hp}/${stats.base.maxHp}`,
+      `MP: ${stats.dynamic.mp}/${stats.base.maxMp}`,
+      '',
+      // Primary Attributes
+      `Strength: ${stats.base.strength}`,
+      `Dexterity: ${stats.base.dexterity}`,
+      `Constitution: ${stats.base.constitution}`,
+      `Intelligence: ${stats.base.intelligence}`,
+      `Wisdom: ${stats.base.wisdom}`,
+      '',
+      // Combat Stats
+      `Physical Attack: ${stats.base.physicalAttack} (Base: ${stats.base.basePhysicalAttack})`,
+      `Physical Defense: ${stats.base.physicalDefense} (Base: ${stats.base.basePhysicalDefense})`,
+      `Magic Attack: ${stats.base.magicAttack} (Base: ${stats.base.baseMagicAttack})`,
+      `Magic Defense: ${stats.base.magicDefense} (Base: ${stats.base.baseMagicDefense})`,
+      '',
+      // Combat Modifiers
+      `Attack Speed: ${stats.base.attackSpeed / 100}% (Base: ${stats.base.baseAttackSpeed / 100}%)`,
+      `Dodge Chance: ${stats.base.dodgeChance / 100}%`,
+      `Critical Chance: ${stats.base.criticalChance / 100}%`
+    ].join('\n');
+  };
+
+  const formatStatsForOthers = (stats) => {
+    return [
+      `Level ${stats.base.level} character`,
+      `HP: ${stats.dynamic.hp}/${stats.base.maxHp}`,
+      `MP: ${stats.dynamic.mp}/${stats.base.maxMp}`
+    ].join('\n');
+  };
+
+  // Helper function to calculate XP needed for next level
+  const calculateXpForNextLevel = (level) => {
+    return Math.floor(2000 * Math.pow(1.1, level - 1));
+  };
 
   async function fetchMessages() {
     try {
@@ -701,7 +735,10 @@ Help:
             try {
               const result = await authenticatedActor.lookAtPlayer(targetPlayer[1]);
               if ('ok' in result) {
-                setMessages(prev => [...prev, result.ok]);
+                setMessages(prev => [...prev, 
+                  `${targetPlayer[1]}`,
+                  formatStatsForOthers(result.ok)
+                ]);
               } else {
                 setMessages(prev => [...prev, 
                   `${targetPlayer[1]} is here.`,
@@ -1160,13 +1197,13 @@ Help:
 
       // Handle stats command
       if (command === '/stats') {
-        const result = await authenticatedActor.getStats();
-        if ('ok' in result) {
-          setMessages(prev => [...prev, formatStats(result.ok)]);
-          return;
+        const stats = await authenticatedActor.getStats();
+        if ('ok' in stats) {
+          setMessages(prev => [...prev, formatStats(stats.ok)]);
         } else {
-          throw new Error(result.err);
+          throw new Error(stats.err);
         }
+        return;
       }
 
       // Handle create character command

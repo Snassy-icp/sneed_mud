@@ -366,18 +366,13 @@ actor class MudBackend() = this {
   };
 
   // Update look command to show player stats
-  public shared(msg) func lookAtPlayer(targetName: Text) : async Result.Result<Text, Text> {
+  public shared(msg) func lookAtPlayer(targetName: Text) : async Result.Result<Types.PlayerStats, Text> {
     // First check if the target exists
     switch (State.findPrincipalByName(state, targetName)) {
       case null { #err("Player not found: " # targetName) };
       case (?targetPrincipal) {
         // Get target's stats
-        switch (Lib.getPlayerStats(state, targetPrincipal)) {
-          case (#err(e)) { #err(e) };
-          case (#ok(stats)) {
-            #ok(targetName # "\n" # Lib.formatPlayerStatsForOthers(stats))
-          };
-        }
+        Lib.getPlayerStats(state, targetPrincipal)
       };
     }
   };

@@ -32,11 +32,11 @@ Impact:
 - Backend sends only structured data, never pre-formatted strings
 - Frontend is responsible for all data formatting and display
 - This separation ensures:
-  * Consistent data structures for programmatic use
-  * Flexible display options (different formats, localizations)
-  * Clear separation of concerns between data and presentation
-  * Easier testing and validation of data structures
-  * Future-proof interface for different display requirements
+  a) Consistent data structures for all operations
+  b) Flexible display options without backend changes
+  c) Easier testing and validation of data
+  d) Clear separation of concerns between data and presentation
+  e) Ability to support multiple display formats/languages
 
 Impact:
 - All backend responses should use well-defined data structures
