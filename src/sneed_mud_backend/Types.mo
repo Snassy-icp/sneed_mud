@@ -213,16 +213,16 @@ module {
     deathTime: ?Int;
   };
 
-  // Class system types
-  public type Class = {
+  // Character class system types
+  public type CharacterClass = {
     name: Text;
     description: Text;
     isAdminClass: Bool;  // True only for the temporary admin class
     baseStats: BaseStats;
-    growthRates: ClassGrowthRates;
+    growthRates: CharacterClassGrowthRates;
   };
 
-  public type ClassGrowthRates = {
+  public type CharacterClassGrowthRates = {
     hpPerLevel: Nat;        // Base HP gain per level
     mpPerLevel: Nat;        // Base MP gain per level
     hpPerCon: Nat;         // Additional HP per point of Constitution

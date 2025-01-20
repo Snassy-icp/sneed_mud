@@ -39,7 +39,7 @@ Realm States:
   * Default state for new realms
   * Can be used for maintenance periods
   * Only realm owners can access
-  * Requires minimum one class and one room to activate
+  * Requires minimum one character class and one room to activate
 - Active: Open for player registration and gameplay
   * All realm features available
   * Players can join and play
@@ -91,7 +91,7 @@ Realm Management:
 - /set_realm_name <name> - Updates realm name
 - /set_realm_description <desc> - Updates realm description
 - /set_realm_visibility <public|private> - Sets realm visibility
-- /activate_realm - Activates realm (requires 1 class, 1 room)
+- /activate_realm - Activates realm (requires 1 character class, 1 room)
 - /deactivate_realm - Deactivates realm for maintenance
 - /add_realm_owner <player> - Adds another realm owner
 - /remove_realm_owner <player> - Removes a realm owner
@@ -124,7 +124,7 @@ Realm Management:
 - Must maintain at least one realm owner at all times
 - Cannot remove last realm owner
 - Realm activation requires:
-  * Minimum one class defined
+  * Minimum one character class defined
   * Minimum one room created
 - Deactivation immediately suspends all player sessions
 - Players cannot join inactive realms

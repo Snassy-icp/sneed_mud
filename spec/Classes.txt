@@ -1,9 +1,82 @@
-Class System Specification
-=======================
+Character Class System Specification
+=================================
 
-1. Overview
------------
-The class system in SNEED MUD provides a data-driven framework for realm owners to create and customize character classes. Each class is defined entirely by its configurable attributes, allowing realm owners complete control over class definitions and stat progression.
+Overview:
+---------
+The character class system in SNEED MUD provides a data-driven framework for realm owners to create and customize character classes. Each character class is defined entirely by its configurable attributes, allowing realm owners complete control over class definitions and stat progression.
+
+Implementation Notes:
+-------------------
+- Character Class Storage
+- Character Class Selection System
+- Character Class Customization
+
+Character Class Storage:
+---------------------
+- Character classes stored in HashMap by name
+- Each character class has unique identifier (name)
+- Admin character class stored separately from regular character classes
+- Admin character class not counted in character class existence checks
+- Character class names are case-sensitive
+
+Bootstrapping Mechanism:
+----------------------
+* When no regular character classes exist, realm owner is assigned temporary "Admin" character class
+* Admin character class has balanced, middle-ground stats
+* Admin character class cannot be selected by other players
+* Admin character class is hidden from character class listings
+* Admin character class is automatically disabled once another character class is created
+* Realm owner can create proper character classes while using Admin character class
+
+Requirements:
+------------
+- Realm owner must create at least one character class before players can register
+- Character classes and rooms must exist before normal player registration
+- Character class names must be unique
+
+Character Class Definition:
+------------------------
+- Each character class is a collection of configurable attributes:
+  * Base stats (HP, MP, etc.)
+  * Primary attributes (STR, DEX, etc.)
+  * Growth rates per level
+  * Description
+- No hardcoded character class behaviors or abilities
+- Changes to character class definitions only affect new characters
+
+Character Class Attributes:
+------------------------
+Base Stats:
+- Base HP (1-10000)
+- Base MP (1-10000)
+- Base Physical Attack (1-1000)
+- Base Physical Defense (1-1000)
+- Base Magic Attack (1-1000)
+- Base Magic Defense (1-1000)
+- Base Attack Speed (1-1000)
+
+Primary Attributes:
+- Strength (1-100)
+- Dexterity (1-100)
+- Constitution (1-100)
+- Intelligence (1-100)
+- Wisdom (1-100)
+
+Growth Rates:
+- HP per level (1-100)
+- MP per level (1-100)
+- Stats per level (1-10)
+
+Storage Details:
+--------------
+- Character Class HashMap key: Character class name (Text)
+- Case-sensitive unique names
+- No special characters in names
+- Maximum name length: 20 characters
+- Maximum description length: 1000 characters
+
+Note: "class" is a reserved keyword in Motoko and many other programming languages (including JavaScript).
+Use "characterClass" as the variable name when implementing character class-related functionality.
 
 2. Key Components
 ----------------

@@ -7,30 +7,30 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
   const [hasName, setHasName] = useState(false);
   const [registrationError, setRegistrationError] = useState(null);
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
-  const [availableClasses, setAvailableClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('');
-  const [loadingClasses, setLoadingClasses] = useState(true);
+  const [availableCharacterClasses, setAvailableCharacterClasses] = useState([]);
+  const [selectedCharacterClass, setSelectedCharacterClass] = useState('');
+  const [loadingCharacterClasses, setLoadingCharacterClasses] = useState(true);
 
   useEffect(() => {
-    async function loadClasses() {
+    async function loadCharacterClasses() {
       try {
-        const result = await authenticatedActor.getAvailableClasses();
+        const result = await authenticatedActor.getAvailableCharacterClasses();
         if ('ok' in result) {
-          setAvailableClasses(result.ok);
+          setAvailableCharacterClasses(result.ok);
           if (result.ok.length > 0) {
-            setSelectedClass(result.ok[0].name);
+            setSelectedCharacterClass(result.ok[0].name);
           }
         } else {
-          setRegistrationError("Failed to load classes: " + result.err);
+          setRegistrationError("Failed to load character classes: " + result.err);
         }
       } catch (error) {
-        setRegistrationError("Failed to load classes: " + error.message);
+        setRegistrationError("Failed to load character classes: " + error.message);
       }
-      setLoadingClasses(false);
+      setLoadingCharacterClasses(false);
     }
 
     if (authenticatedActor) {
-      loadClasses();
+      loadCharacterClasses();
     }
   }, [authenticatedActor]);
 
@@ -50,7 +50,7 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
       }
 
       // Then create character with selected class
-      const characterResult = await authenticatedActor.createCharacterWithClass(selectedClass);
+      const characterResult = await authenticatedActor.createCharacterWithClass(selectedCharacterClass);
       if ('err' in characterResult) {
         setRegistrationError(characterResult.err);
         // Try to revert name registration if character creation fails
@@ -100,12 +100,12 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
     return <Navigate to="/game" replace />;
   }
 
-  if (loadingClasses) {
-    return <div>Loading available classes...</div>;
+  if (loadingCharacterClasses) {
+    return <div>Loading available character classes...</div>;
   }
 
-  if (availableClasses.length === 0) {
-    return <div>No classes available for registration. Please try again later.</div>;
+  if (availableCharacterClasses.length === 0) {
+    return <div>No character classes available for registration. Please try again later.</div>;
   }
 
   return (
@@ -126,24 +126,25 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
           </div>
           
           <div className="form-group">
-            <label htmlFor="class">Choose Your Class:</label>
+            <label htmlFor="characterClass">Choose Your Character Class:</label>
             <select
-              id="class"
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
+              id="characterClass"
+              value={selectedCharacterClass}
+              onChange={(e) => setSelectedCharacterClass(e.target.value)}
               required
             >
-              {availableClasses.map((classData) => (
-                <option key={classData.name} value={classData.name}>
-                  {classData.name}
+              <option value="">Select a character class</option>
+              {availableCharacterClasses.map((characterClass) => (
+                <option key={characterClass.name} value={characterClass.name}>
+                  {characterClass.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {selectedClass && (
-            <div className="class-description">
-              {availableClasses.find(c => c.name === selectedClass)?.description}
+          {selectedCharacterClass && (
+            <div className="character-class-description">
+              {availableCharacterClasses.find(characterClass => characterClass.name === selectedCharacterClass)?.description}
             </div>
           )}
 

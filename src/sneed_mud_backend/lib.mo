@@ -1043,69 +1043,69 @@ module {
     }
   };
 
-  // Get available classes for character creation
-  public func getAvailableClasses(state: MudState, caller: Principal) : Result.Result<[Types.Class], Text> {
+  // Get available character classes for character creation
+  public func getAvailableCharacterClasses(state: MudState, caller: Principal) : Result.Result<[Types.CharacterClass], Text> {
     let isRealmOwner = State.isRealmOwner(state, caller);
     
-    // Convert classes HashMap to array, excluding God class
-    let regularClasses = Buffer.Buffer<Types.Class>(state.classes.size());
-    for ((_, classData) in state.classes.entries()) {
-      if (not classData.isAdminClass) {
-        regularClasses.add(classData);
+    // Convert character classes HashMap to array, excluding admin class
+    let regularCharacterClasses = Buffer.Buffer<Types.CharacterClass>(state.characterClasses.size());
+    for ((_, characterClass) in state.characterClasses.entries()) {
+      if (not characterClass.isAdminClass) {
+        regularCharacterClasses.add(characterClass);
       };
     };
 
-    // If no regular classes exist and caller is realm owner, add God class
-    if (regularClasses.size() == 0 and isRealmOwner) {
-      switch (state.adminClass) {
-        case (?godClass) { 
-          regularClasses.add(godClass);
+    // If no regular character classes exist and caller is realm owner, add admin class
+    if (regularCharacterClasses.size() == 0 and isRealmOwner) {
+      switch (state.adminCharacterClass) {
+        case (?adminClass) { 
+          regularCharacterClasses.add(adminClass);
         };
         case null { };
       };
     };
 
-    #ok(Buffer.toArray(regularClasses))
+    #ok(Buffer.toArray(regularCharacterClasses))
   };
 
-  // Create character with specified class
-  public func createCharacterWithClass(state: MudState, caller: Principal, className: Text) : Result.Result<(), Text> {
+  // Create character with specified character class
+  public func createCharacterWithClass(state: MudState, caller: Principal, characterClassName: Text) : Result.Result<(), Text> {
     // Check if player already has stats
     switch (state.playerBaseStats.get(caller)) {
       case (?_) { return #err("You already have a character") };
       case null { };
     };
 
-    // Get the class
-    let selectedClass : ?Types.Class = 
-      if (className == "God") {
-        // Special handling for God class
-        if (State.isRealmOwner(state, caller) and state.classes.size() == 0) {
-          state.adminClass;
+    // Get the character class
+    let selectedCharacterClass : ?Types.CharacterClass = 
+      if (characterClassName == "God") {
+        // Special handling for admin class
+        if (State.isRealmOwner(state, caller) and state.characterClasses.size() == 0) {
+          state.adminCharacterClass;
         } else {
           null;
         };
       } else {
-        state.classes.get(className);
+        state.characterClasses.get(characterClassName);
       };
 
-    switch (selectedClass) {
+    switch (selectedCharacterClass) {
       case null { 
-        if (className == "God") {
+        if (characterClassName == "God") {
           if (not State.isRealmOwner(state, caller)) {
-            #err("Only realm owners can use the God class")
-          } else if (state.classes.size() > 0) {
-            #err("God class is only available when no other classes exist")
+            #err("Only realm owners can use the admin character class")
+          } else if (state.characterClasses.size() > 0) {
+            #err("Admin character class is only available when no other character classes exist")
           } else {
-            #err("God class not found")
+            #err("Admin character class not found")
           };
         } else {
-          #err("Invalid class selected")
+          #err("Invalid character class selected")
         };
       };
-      case (?classData) {
-        // Initialize stats from class template
-        let baseStats = classData.baseStats;
+      case (?characterClass) {
+        // Initialize stats from character class template
+        let baseStats = characterClass.baseStats;
         let dynamicStats : Types.DynamicStats = {
           hp = baseStats.maxHp;
           mp = baseStats.maxMp;
@@ -1122,105 +1122,104 @@ module {
     };
   };
 
-  // Create a new class with default values
-  public func createNewClass(state: MudState, caller: Principal, name: Text, description: Text) : Result.Result<(), Text> {
-    // Check if caller is a realm owner
+  // Create a new character class with default values
+  public func createNewCharacterClass(state: MudState, caller: Principal, name: Text, description: Text) : Result.Result<(), Text> {
     if (not State.isRealmOwner(state, caller)) {
-      return #err("Only realm owners can create classes");
+      return #err("Only realm owners can create character classes");
     };
 
-    // Check if class name already exists
-    switch (state.classes.get(name)) {
-      case (?_) { return #err("A class with this name already exists") };
+    // Check if character class name already exists
+    switch (state.characterClasses.get(name)) {
+      case (?_) { return #err("A character class with this name already exists") };
       case null { };
     };
 
-    // Create the class
-    let newClass = Class.createClass(name, description);
-    state.classes.put(name, newClass);
+    // Create the character class
+    let newCharacterClass = Class.createCharacterClass(name, description);
+    state.characterClasses.put(name, newCharacterClass);
 
-    // If this is the first regular class, disable God class
-    if (state.classes.size() == 1) {
-      state.adminClass := null;
+    // If this is the first regular character class, disable admin class
+    if (state.characterClasses.size() == 1) {
+      state.adminCharacterClass := null;
     };
 
     #ok(())
   };
 
   // Helper function to update description
-  private func updateClassDescription(classData: Types.Class, value: Text) : Types.Class {
+  private func updateCharacterClassDescription(characterClass: Types.CharacterClass, value: Text) : Types.CharacterClass {
     {
-      name = classData.name;
+      name = characterClass.name;
       description = value;
-      isAdminClass = classData.isAdminClass;
-      baseStats = classData.baseStats;
-      growthRates = classData.growthRates;
+      isAdminClass = characterClass.isAdminClass;
+      baseStats = characterClass.baseStats;
+      growthRates = characterClass.growthRates;
     }
   };
 
   // Helper function to update base HP
-  private func updateClassBaseHp(classData: Types.Class, hp: Nat) : Result.Result<Types.Class, Text> {
+  private func updateCharacterClassBaseHp(characterClass: Types.CharacterClass, hp: Nat) : Result.Result<Types.CharacterClass, Text> {
     if (hp < 1 or hp > 10000) {
       #err("HP must be between 1 and 10000");
     } else {
-      let newBaseStats = { classData.baseStats with 
+      let newBaseStats = { characterClass.baseStats with 
         baseHp = hp;
-        maxHp = hp + (classData.baseStats.constitution * HP_PER_CONSTITUTION);
+        maxHp = hp + (characterClass.baseStats.constitution * HP_PER_CONSTITUTION);
       };
       #ok({
-        name = classData.name;
-        description = classData.description;
-        isAdminClass = classData.isAdminClass;
+        name = characterClass.name;
+        description = characterClass.description;
+        isAdminClass = characterClass.isAdminClass;
         baseStats = newBaseStats;
-        growthRates = classData.growthRates;
+        growthRates = characterClass.growthRates;
       })
     }
   };
 
   // Helper function to update base MP
-  private func updateClassBaseMp(classData: Types.Class, mp: Nat) : Result.Result<Types.Class, Text> {
+  private func updateCharacterClassBaseMp(characterClass: Types.CharacterClass, mp: Nat) : Result.Result<Types.CharacterClass, Text> {
     if (mp < 1 or mp > 10000) {
       #err("MP must be between 1 and 10000");
     } else {
-      let newBaseStats = { classData.baseStats with 
+      let newBaseStats = { characterClass.baseStats with 
         baseMp = mp;
-        maxMp = mp + (classData.baseStats.wisdom * MP_PER_WISDOM);
+        maxMp = mp + (characterClass.baseStats.wisdom * MP_PER_WISDOM);
       };
       #ok({
-        name = classData.name;
-        description = classData.description;
-        isAdminClass = classData.isAdminClass;
+        name = characterClass.name;
+        description = characterClass.description;
+        isAdminClass = characterClass.isAdminClass;
         baseStats = newBaseStats;
-        growthRates = classData.growthRates;
+        growthRates = characterClass.growthRates;
       })
     }
   };
 
-  // Update a class attribute
-  public func updateClass(
-    state: MudState, 
-    caller: Principal, 
-    className: Text, 
-    attribute: Text, 
+  // Update a character class attribute
+  public func updateCharacterClass(
+    state: MudState,
+    caller: Principal,
+    characterClassName: Text,
+    attribute: Text,
     value: Text
   ) : Result.Result<(), Text> {
     // Check if caller is a realm owner
     if (not State.isRealmOwner(state, caller)) {
-      return #err("Only realm owners can update classes");
+      return #err("Only realm owners can update character classes");
     };
 
-    // Get the class data
-    let existingData = state.classes.get(className);
-    switch (existingData) {
-      case null { return #err("Class not found") };
-      case (?data) {
-        if (data.isAdminClass) {
-          return #err("Cannot modify the God class");
+    // Get the character class data
+    let existingCharacterClass = state.characterClasses.get(characterClassName);
+    switch (existingCharacterClass) {
+      case null { return #err("Character class not found") };
+      case (?characterClass) {
+        if (characterClass.isAdminClass) {
+          return #err("Cannot modify the admin character class");
         };
 
         // Handle each attribute type
-        let updated = if (Text.equal(attribute, "description")) {
-          updateClassDescription(data, value);
+        let updatedCharacterClass = if (Text.equal(attribute, "description")) {
+          updateCharacterClassDescription(characterClass, value);
         } else if (Text.equal(attribute, "baseHp")) {
           switch (Nat.fromText(value)) {
             case null { return #err("Invalid HP value") };
@@ -1228,16 +1227,16 @@ module {
               if (hp < 1 or hp > 10000) {
                 return #err("HP must be between 1 and 10000");
               };
-              let newBaseStats = { data.baseStats with 
+              let newBaseStats = { characterClass.baseStats with 
                 baseHp = hp;
-                maxHp = hp + (data.baseStats.constitution * HP_PER_CONSTITUTION);
+                maxHp = hp + (characterClass.baseStats.constitution * HP_PER_CONSTITUTION);
               };
               {
-                name = data.name;
-                description = data.description;
-                isAdminClass = data.isAdminClass;
+                name = characterClass.name;
+                description = characterClass.description;
+                isAdminClass = characterClass.isAdminClass;
                 baseStats = newBaseStats;
-                growthRates = data.growthRates;
+                growthRates = characterClass.growthRates;
               };
             };
           };
@@ -1248,16 +1247,16 @@ module {
               if (mp < 1 or mp > 10000) {
                 return #err("MP must be between 1 and 10000");
               };
-              let newBaseStats = { data.baseStats with 
+              let newBaseStats = { characterClass.baseStats with 
                 baseMp = mp;
-                maxMp = mp + (data.baseStats.wisdom * MP_PER_WISDOM);
+                maxMp = mp + (characterClass.baseStats.wisdom * MP_PER_WISDOM);
               };
               {
-                name = data.name;
-                description = data.description;
-                isAdminClass = data.isAdminClass;
+                name = characterClass.name;
+                description = characterClass.description;
+                isAdminClass = characterClass.isAdminClass;
                 baseStats = newBaseStats;
-                growthRates = data.growthRates;
+                growthRates = characterClass.growthRates;
               };
             };
           };
@@ -1265,32 +1264,32 @@ module {
           return #err("Unknown attribute: " # attribute);
         };
 
-        state.classes.put(className, updated);
+        state.characterClasses.put(characterClassName, updatedCharacterClass);
         #ok(());
       };
     };
   };
 
-  // List all available classes
-  public func listClasses(state: MudState, caller: Principal) : Result.Result<[Types.Class], Text> {
-    let classes = Buffer.Buffer<Types.Class>(state.classes.size());
-    for ((_, classData) in state.classes.entries()) {
-      if (not classData.isAdminClass) {
-        classes.add(classData);
+  // List all available character classes
+  public func listCharacterClasses(state: MudState, caller: Principal) : Result.Result<[Types.CharacterClass], Text> {
+    let characterClasses = Buffer.Buffer<Types.CharacterClass>(state.characterClasses.size());
+    for ((_, characterClass) in state.characterClasses.entries()) {
+      if (not characterClass.isAdminClass) {
+        characterClasses.add(characterClass);
       };
     };
-    #ok(Buffer.toArray(classes))
+    #ok(Buffer.toArray(characterClasses))
   };
 
-  // Show detailed information about a specific class
-  public func showClass(state: MudState, className: Text) : Result.Result<Types.Class, Text> {
-    switch (state.classes.get(className)) {
-      case null { #err("Class not found") };
-      case (?classData) {
-        if (classData.isAdminClass) {
-          return #err("Class not found");  // Hide God class
+  // Show detailed information about a specific character class
+  public func showCharacterClass(state: MudState, characterClassName: Text) : Result.Result<Types.CharacterClass, Text> {
+    switch (state.characterClasses.get(characterClassName)) {
+      case null { #err("Character class not found") };
+      case (?characterClass) {
+        if (characterClass.isAdminClass) {
+          return #err("Character class not found");  // Hide admin class
         };
-        #ok(classData)
+        #ok(characterClass)
       };
     }
   };

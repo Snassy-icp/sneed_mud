@@ -8,13 +8,13 @@ import HashMap "mo:base/HashMap";
 
 module {
   // Class type definition
-  public type Class = {
+  public type CharacterClass = {
     name: Text;
     description: Text;
     isAdminClass: Bool;  // True only for the temporary admin class
     baseStats: Types.BaseStats;
     // Growth multipliers for level-up calculations
-    growthRates: Types.ClassGrowthRates;
+    growthRates: Types.CharacterClassGrowthRates;
   };
 
   // Admin class constants
@@ -24,7 +24,7 @@ module {
   private let ADMIN_BASE_GROWTH = 5;
 
   // Create the admin class with balanced stats
-  public func createAdminClass() : Types.Class {
+  public func createAdminCharacterClass() : CharacterClass {
     {
       name = ADMIN_CLASS_NAME;
       description = ADMIN_CLASS_DESCRIPTION;
@@ -68,18 +68,18 @@ module {
   };
 
   // Check if a player should get the admin class
-  public func shouldGetAdminClass(classes: HashMap.HashMap<Text, Types.Class>, isRealmOwner: Bool) : Bool {
+  public func shouldGetAdminClass(classes: HashMap.HashMap<Text, CharacterClass>, isRealmOwner: Bool) : Bool {
     isRealmOwner and classes.size() == 0
   };
 
   // Create a new class with default values
-  public func createClass(name: Text, description: Text) : Types.Class {
+  public func createCharacterClass(name: Text, description: Text) : CharacterClass {
     {
       name = name;
       description = description;
       isAdminClass = false;
       baseStats = createDefaultBaseStats();
-      growthRates = createDefaultGrowthRates();
+      growthRates = createDefaultCharacterClassGrowthRates();
     }
   };
 
@@ -112,9 +112,9 @@ module {
   };
 
   // Create default growth rates for a new class
-  private func createDefaultGrowthRates() : Types.ClassGrowthRates {
+  private func createDefaultCharacterClassGrowthRates() : Types.CharacterClassGrowthRates {
     {
-      hpPerLevel = 5;
+      hpPerLevel = 10;
       mpPerLevel = 5;
       hpPerCon = 5;
       mpPerWis = 5;

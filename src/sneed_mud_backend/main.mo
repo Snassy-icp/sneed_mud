@@ -357,17 +357,17 @@ actor class MudBackend() = this {
   };
 
   // Character creation and stats
-  public shared(msg) func getAvailableClasses() : async Result.Result<[Types.Class], Text> {
-    Lib.getAvailableClasses(state, msg.caller)
+  public shared(msg) func getAvailableCharacterClasses() : async Result.Result<[Types.CharacterClass], Text> {
+    Lib.getAvailableCharacterClasses(state, msg.caller)
   };
 
-  public shared(msg) func createCharacterWithClass(className: Text) : async Result.Result<(), Text> {
-    Lib.createCharacterWithClass(state, msg.caller, className)
+  public shared(msg) func createCharacterWithClass(characterClassName: Text) : async Result.Result<(), Text> {
+    Lib.createCharacterWithClass(state, msg.caller, characterClassName)
   };
 
   // Deprecate old createCharacter in favor of createCharacterWithClass
   public shared(msg) func createCharacter() : async Result.Result<(), Text> {
-    #err("Character creation now requires selecting a class. Use createCharacterWithClass instead.")
+    #err("Character creation now requires selecting a character class. Use createCharacterWithClass instead.")
   };
 
   public shared(msg) func getStats() : async Result.Result<Types.PlayerStats, Text> {
@@ -537,20 +537,20 @@ actor class MudBackend() = this {
     }
   };
 
-  // Class management
-  public shared(msg) func createClass(name: Text, description: Text) : async Result.Result<(), Text> {
-    Lib.createNewClass(state, msg.caller, name, description)
+  // Character class management
+  public shared(msg) func createCharacterClass(name: Text, description: Text) : async Result.Result<(), Text> {
+    Lib.createNewCharacterClass(state, msg.caller, name, description)
   };
 
-  public shared(msg) func updateClass(className: Text, attribute: Text, value: Text) : async Result.Result<(), Text> {
-    Lib.updateClass(state, msg.caller, className, attribute, value)
+  public shared(msg) func updateCharacterClass(characterClassName: Text, attribute: Text, value: Text) : async Result.Result<(), Text> {
+    Lib.updateCharacterClass(state, msg.caller, characterClassName, attribute, value)
   };
 
-  public shared(msg) func listClasses() : async Result.Result<[Types.Class], Text> {
-    Lib.listClasses(state, msg.caller)
+  public shared(msg) func listCharacterClasses() : async Result.Result<[Types.CharacterClass], Text> {
+    Lib.listCharacterClasses(state, msg.caller)
   };
 
-  public shared(msg) func showClass(className: Text) : async Result.Result<Types.Class, Text> {
-    Lib.showClass(state, className)
+  public shared(msg) func showCharacterClass(characterClassName: Text) : async Result.Result<Types.CharacterClass, Text> {
+    Lib.showCharacterClass(state, characterClassName)
   };
 }

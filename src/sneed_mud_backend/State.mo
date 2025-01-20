@@ -33,8 +33,8 @@ module {
     var stablePlayerDynamicStats: [(Principal, Types.DynamicStats)];
     var stableRegisteredTokens: Types.StableTokenRegistrations;
     var stableMetadataCache: [(Principal, Types.TokenMetadata)];
-    var stableClasses: [(Text, Types.Class)];
-    var stableAdminClass: ?Types.Class;
+    var stableCharacterClasses: [(Text, Types.CharacterClass)];
+    var stableAdminCharacterClass: ?Types.CharacterClass;
   };
 
   public type MudState = {
@@ -54,8 +54,8 @@ module {
     playerLastActivity: HashMap.HashMap<Principal, Int>;
     var afkConfig: Types.AfkConfig;
     playerCombatStates: HashMap.HashMap<Principal, Types.CombatState>;
-    classes: HashMap.HashMap<Text, Types.Class>;
-    var adminClass: ?Types.Class;
+    characterClasses: HashMap.HashMap<Text, Types.CharacterClass>;
+    var adminCharacterClass: ?Types.CharacterClass;
   };
 
   public func initStable() : StableState {
@@ -80,8 +80,8 @@ module {
       var stablePlayerDynamicStats = [] : [(Principal, Types.DynamicStats)];
       var stableRegisteredTokens = [] : Types.StableTokenRegistrations;
       var stableMetadataCache = [] : [(Principal, Types.TokenMetadata)];
-      var stableClasses = [] : [(Text, Types.Class)];
-      var stableAdminClass = null;
+      var stableCharacterClasses = [] : [(Text, Types.CharacterClass)];
+      var stableAdminCharacterClass = null;
     };
     state
   };
@@ -161,8 +161,8 @@ module {
       Principal.hash
     );
 
-    let classes = HashMap.fromIter<Text, Types.Class>(
-      stable_state.stableClasses.vals(),
+    let characterClasses = HashMap.fromIter<Text, Types.CharacterClass>(
+      stable_state.stableCharacterClasses.vals(),
       10,
       Text.equal,
       Text.hash
@@ -188,8 +188,8 @@ module {
         offline_timeout_ns = 60 * 60 * 1_000_000_000;
       };
       playerCombatStates = HashMap.HashMap<Principal, Types.CombatState>(10, Principal.equal, Principal.hash);
-      classes = classes;
-      var adminClass = stable_state.stableAdminClass;
+      characterClasses = characterClasses;
+      var adminCharacterClass = stable_state.stableAdminCharacterClass;
     }
   };
 
@@ -231,8 +231,8 @@ module {
       var stablePlayerDynamicStats = Iter.toArray(state.playerDynamicStats.entries());
       var stableRegisteredTokens = Buffer.toArray(stableRegisteredTokens);
       var stableMetadataCache = Iter.toArray(state.metadataCache.entries());
-      var stableClasses = Iter.toArray(state.classes.entries());
-      var stableAdminClass = state.adminClass;
+      var stableCharacterClasses = Iter.toArray(state.characterClasses.entries());
+      var stableAdminCharacterClass = state.adminCharacterClass;
     };
     stableState
   };
