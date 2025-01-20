@@ -71,9 +71,9 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
       // Then create character with selected class
       const characterResult = await authenticatedActor.createCharacterWithClass(selectedCharacterClass);
       if ('err' in characterResult) {
-        setRegistrationError(characterResult.err);
-        // Try to revert name registration if character creation fails
-        await authenticatedActor.unregisterPlayerName();
+        setRegistrationError("Failed to create character: " + characterResult.err);
+        // Note: If character creation fails, the name will remain registered
+        // This is okay as the name is still "owned" by this principal
         return;
       }
 
@@ -131,25 +131,18 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
     <div className="registration-page">
       <div className="registration-container">
         <h2>Register Your Character</h2>
-        <div className="principal-info" style={{
-          marginBottom: '20px',
-          padding: '10px',
-          backgroundColor: '#f5f5f5',
-          borderRadius: '4px'
-        }}>
-          <p style={{ margin: 0 }}>Your Principal ID: <code style={{
-            backgroundColor: '#e0e0e0',
-            padding: '2px 4px',
-            borderRadius: '3px',
-            fontFamily: 'monospace',
-            wordBreak: 'break-all'
-          }}>{principal}</code></p>
-          {isRealmOwner && (
-            <p style={{ margin: '10px 0 0 0', color: '#666' }}>
+        {isRealmOwner && (
+          <div className="realm-owner-info" style={{
+            marginBottom: '20px',
+            padding: '10px',
+            backgroundColor: '#f5f5f5',
+            borderRadius: '4px'
+          }}>
+            <p style={{ margin: 0, color: '#666' }}>
               You are a realm owner {availableCharacterClasses.length === 0 && "- You will be assigned the God class"}
             </p>
-          )}
-        </div>
+          </div>
+        )}
         <form onSubmit={handleRegistration}>
           <div className="form-group">
             <label htmlFor="playerName">Character Name:</label>

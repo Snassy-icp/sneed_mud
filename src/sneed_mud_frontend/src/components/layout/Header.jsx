@@ -5,6 +5,12 @@ function Header({ isAuthenticated, playerName, onLogout, principal }) {
     navigator.clipboard.writeText(principal);
   };
 
+  // Function to compact principal ID - show first 5 and last 5 chars
+  const compactPrincipal = (principal) => {
+    if (principal.length <= 10) return principal;
+    return `${principal.slice(0, 5)}...${principal.slice(-5)}`;
+  };
+
   return (
     <header className="header">
       <div className="header-content">
@@ -15,7 +21,7 @@ function Header({ isAuthenticated, playerName, onLogout, principal }) {
               <>
                 <span>Welcome, {playerName}!</span>
                 <div className="principal-container">
-                  Principal: <code onClick={copyPrincipal} title="Click to copy">{principal}</code>
+                  Principal: <code onClick={copyPrincipal} title="Click to copy full ID">{compactPrincipal(principal)}</code>
                 </div>
                 <Link to="/game">Game</Link>
                 <button onClick={onLogout}>Logout</button>
@@ -23,7 +29,7 @@ function Header({ isAuthenticated, playerName, onLogout, principal }) {
             ) : (
               <>
                 <div className="principal-container">
-                  Principal: <code onClick={copyPrincipal} title="Click to copy">{principal}</code>
+                  Principal: <code onClick={copyPrincipal} title="Click to copy full ID">{compactPrincipal(principal)}</code>
                 </div>
                 <Link to="/register">Register Character</Link>
                 <button onClick={onLogout}>Logout</button>
