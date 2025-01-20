@@ -959,6 +959,27 @@ module {
           case null { #err("No character found") };
           case (?dynamicStats) {
             let nextLevelXp = State.xpForNextLevel(baseStats.level);
+            
+            // Get the character's class name
+            var className = "Unknown";  // Default if not found
+            label classSearch for ((n, c) in state.characterClasses.entries()) {
+              if (c.baseStats == baseStats) {
+                className := n;
+                break classSearch;
+              };
+            };
+            // Check admin class if not found in regular classes
+            if (className == "Unknown") {
+              switch (state.adminCharacterClass) {
+                case (?adminClass) {
+                  if (adminClass.baseStats == baseStats) {
+                    className := adminClass.name;
+                  };
+                };
+                case null {};
+              };
+            };
+
             let stats : Types.PlayerStats = {
               base = baseStats;
               dynamic = dynamicStats;
@@ -969,6 +990,7 @@ module {
               baseAttackSpeedPercent = baseStats.baseAttackSpeed * 10000 / 100;
               dodgeChancePercent = baseStats.dodgeChance * 10000 / 100;
               criticalChancePercent = baseStats.criticalChance * 10000 / 100;
+              characterClass = className;
             };
             #ok(stats)
           };

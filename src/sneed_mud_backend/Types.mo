@@ -152,6 +152,7 @@ module {
     baseAttackSpeedPercent: Nat;
     dodgeChancePercent: Nat;
     criticalChancePercent: Nat;
+    characterClass: Text;  // Name of the character's class
   };
 
   // Token metadata types

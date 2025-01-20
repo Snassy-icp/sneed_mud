@@ -195,7 +195,7 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     
     return [
       // Basic Info
-      `Level: ${stats.base.level}`,
+      `Level ${stats.base.level} ${stats.characterClass}`,
       `XP: ${stats.dynamic.xp}/${stats.xpForNextLevel} (${stats.xpNeeded} more needed for next level)`,
       '',
       // Current Status
@@ -224,7 +224,7 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
   const formatStatsForOthers = (stats) => {
     return [
-      `Level ${stats.base.level} character`,
+      `Level ${stats.base.level} ${stats.characterClass}`,
       `HP: ${stats.dynamic.hp}/${stats.base.maxHp}`,
       `MP: ${stats.dynamic.mp}/${stats.base.maxMp}`
     ].join('\n');
