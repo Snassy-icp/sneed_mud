@@ -404,6 +404,11 @@ actor class MudBackend() = this {
     }
   };
 
+  // Update player activity timestamp
+  public shared(msg) func updateActivity() : async () {
+    State.updatePlayerActivity(state, msg.caller);
+  };
+
   // Token management methods
   public shared(msg) func registerToken(ledgerCanisterId: Principal) : async Result.Result<(), Text> {
     let token : ICRC1.Token = actor(Principal.toText(ledgerCanisterId));

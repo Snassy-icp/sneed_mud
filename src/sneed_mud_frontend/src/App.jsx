@@ -149,64 +149,17 @@ function App() {
     }
   }
 
-  async function loginII() {
-    if (!authClient) return;
-
+  async function handleLogin() {
     try {
-      console.log('Starting login process...');
-      // When in staging or production, always use the IC network II
-      const iiUrl = "https://identity.ic0.app/#authorize";
-      
-      console.log('Using II URL:', iiUrl);
-    
-      await new Promise((resolve, reject) => {
-        authClient.login({
-          identityProvider: iiUrl,
-          onSuccess: resolve,
-          onError: reject,
-        });
-      });
-    
-      const isAuthenticated = await authClient.isAuthenticated();
-      console.log('Authentication status:', isAuthenticated);
-      
-      if (!isAuthenticated) {
-        throw new Error("Authentication failed");
-      }
-
+      await authClient.login();
       const identity = authClient.getIdentity();
-      const principalStr = identity.getPrincipal().toString();
-      console.log('Got principal:', principalStr);
-      setPrincipal(principalStr);
-      
-      const agent = new HttpAgent({ identity });
-      // No need to fetch root key in production/staging
-      
-      console.log('Creating actor with backend canister:', BACKEND_CANISTER_ID);
-      const actor = Actor.createActor(idlFactory, {
-        agent,
-        canisterId: BACKEND_CANISTER_ID,
-      });
-      
+      const principal = identity.getPrincipal().toString();
+      setPrincipal(principal);
+      const actor = await createAuthenticatedActor(identity);
       setAuthenticatedActor(actor);
-      
-      const principalObj = Principal.fromText(principalStr);
-      console.log('Fetching player name...');
-      const nameOpt = await actor.getPlayerName(principalObj);
-      console.log('Player name response:', nameOpt);
-      
-      if (Array.isArray(nameOpt) && nameOpt.length > 0) {
-        setPlayerName(nameOpt[0]);
-      } else {
-        setPlayerName(null);
-      }
+      await actor.updateActivity(); // Update activity on login
     } catch (error) {
-      console.error("Login failed:", error);
-      // Clear all auth state on error
-      setPrincipal(null);
-      setPlayerName(null);
-      setAuthenticatedActor(null);
-      throw error;
+      console.error("Login error:", error);
     }
   }
 
@@ -238,7 +191,7 @@ function App() {
           principal={principal}
         />}>
           <Route index element={<LoginPage 
-            onLogin={loginII} 
+            onLogin={handleLogin} 
             isAuthenticated={!!principal}
             isLoading={isLoading}
             playerName={playerName}
