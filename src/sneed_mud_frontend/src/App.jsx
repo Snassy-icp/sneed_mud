@@ -235,6 +235,7 @@ function App() {
           isAuthenticated={!!principal}
           playerName={playerName}
           onLogout={logout}
+          principal={principal}
         />}>
           <Route index element={<LoginPage 
             onLogin={loginII} 

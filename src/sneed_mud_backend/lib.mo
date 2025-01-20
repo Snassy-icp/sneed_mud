@@ -12,6 +12,7 @@ import Array "mo:base/Array";
 import HashMap "mo:base/HashMap";
 import Hash "mo:base/Hash";
 import Int "mo:base/Int";
+import Iter "mo:base/Iter";
 import Class "./Class";
 
 module {
@@ -822,6 +823,15 @@ module {
         owners = [newOwner];
       };
       state.realmConfig := newConfig;
+
+      // Create admin class if it doesn't exist
+      switch (state.adminCharacterClass) {
+        case null {
+          let adminClass = Class.createAdminCharacterClass();
+          state.adminCharacterClass := ?adminClass;
+        };
+        case _ {};
+      };
       return #ok(());
     };
 

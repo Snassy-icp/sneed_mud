@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 
-function Header({ isAuthenticated, playerName, onLogout }) {
+function Header({ isAuthenticated, playerName, onLogout, principal }) {
+  const copyPrincipal = () => {
+    navigator.clipboard.writeText(principal);
+  };
+
   return (
     <header className="header">
       <div className="header-content">
@@ -10,11 +14,17 @@ function Header({ isAuthenticated, playerName, onLogout }) {
             {playerName ? (
               <>
                 <span>Welcome, {playerName}!</span>
+                <div className="principal-container">
+                  Principal: <code onClick={copyPrincipal} title="Click to copy">{principal}</code>
+                </div>
                 <Link to="/game">Game</Link>
                 <button onClick={onLogout}>Logout</button>
               </>
             ) : (
               <>
+                <div className="principal-container">
+                  Principal: <code onClick={copyPrincipal} title="Click to copy">{principal}</code>
+                </div>
                 <Link to="/register">Register Character</Link>
                 <button onClick={onLogout}>Logout</button>
               </>
@@ -22,6 +32,24 @@ function Header({ isAuthenticated, playerName, onLogout }) {
           </nav>
         )}
       </div>
+      <style>{`
+        .principal-container {
+          display: inline-block;
+          margin: 0 10px;
+          color: #d4d4d4;
+        }
+        .principal-container code {
+          background: #2d2d2d;
+          padding: 2px 6px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: monospace;
+          color: #e0e0e0;
+        }
+        .principal-container code:hover {
+          background: #3d3d3d;
+        }
+      `}</style>
     </header>
   );
 }

@@ -10,6 +10,22 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
   const [availableCharacterClasses, setAvailableCharacterClasses] = useState([]);
   const [selectedCharacterClass, setSelectedCharacterClass] = useState('');
   const [loadingCharacterClasses, setLoadingCharacterClasses] = useState(true);
+  const [isRealmOwner, setIsRealmOwner] = useState(false);
+
+  useEffect(() => {
+    async function checkRealmOwner() {
+      try {
+        const ownerResult = await authenticatedActor.isRealmOwner(Principal.fromText(principal));
+        setIsRealmOwner(ownerResult);
+      } catch (error) {
+        console.error("Error checking realm owner status:", error);
+      }
+    }
+
+    if (authenticatedActor) {
+      checkRealmOwner();
+    }
+  }, [authenticatedActor, principal]);
 
   useEffect(() => {
     async function loadCharacterClasses() {
@@ -17,7 +33,10 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
         const result = await authenticatedActor.getAvailableCharacterClasses();
         if ('ok' in result) {
           setAvailableCharacterClasses(result.ok);
-          if (result.ok.length > 0) {
+          // If realm owner and no classes exist, select God class
+          if (isRealmOwner && result.ok.length === 0) {
+            setSelectedCharacterClass("God");
+          } else if (result.ok.length > 0) {
             setSelectedCharacterClass(result.ok[0].name);
           }
         } else {
@@ -32,7 +51,7 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
     if (authenticatedActor) {
       loadCharacterClasses();
     }
-  }, [authenticatedActor]);
+  }, [authenticatedActor, isRealmOwner]);
 
   async function handleRegistration(event) {
     event.preventDefault();
@@ -104,7 +123,7 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
     return <div>Loading available character classes...</div>;
   }
 
-  if (availableCharacterClasses.length === 0) {
+  if (availableCharacterClasses.length === 0 && !isRealmOwner) {
     return <div>No character classes available for registration. Please try again later.</div>;
   }
 
@@ -112,6 +131,25 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
     <div className="registration-page">
       <div className="registration-container">
         <h2>Register Your Character</h2>
+        <div className="principal-info" style={{
+          marginBottom: '20px',
+          padding: '10px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px'
+        }}>
+          <p style={{ margin: 0 }}>Your Principal ID: <code style={{
+            backgroundColor: '#e0e0e0',
+            padding: '2px 4px',
+            borderRadius: '3px',
+            fontFamily: 'monospace',
+            wordBreak: 'break-all'
+          }}>{principal}</code></p>
+          {isRealmOwner && (
+            <p style={{ margin: '10px 0 0 0', color: '#666' }}>
+              You are a realm owner {availableCharacterClasses.length === 0 && "- You will be assigned the God class"}
+            </p>
+          )}
+        </div>
         <form onSubmit={handleRegistration}>
           <div className="form-group">
             <label htmlFor="playerName">Character Name:</label>
@@ -127,24 +165,40 @@ function CharacterRegistrationPage({ authenticatedActor, principal, onNameSet, o
           
           <div className="form-group">
             <label htmlFor="characterClass">Choose Your Character Class:</label>
-            <select
-              id="characterClass"
-              value={selectedCharacterClass}
-              onChange={(e) => setSelectedCharacterClass(e.target.value)}
-              required
-            >
-              <option value="">Select a character class</option>
-              {availableCharacterClasses.map((characterClass) => (
-                <option key={characterClass.name} value={characterClass.name}>
-                  {characterClass.name}
-                </option>
-              ))}
-            </select>
+            {isRealmOwner && availableCharacterClasses.length === 0 ? (
+              <select
+                id="characterClass"
+                value="God"
+                disabled
+                required
+              >
+                <option value="God">God Class (Realm Owner)</option>
+              </select>
+            ) : (
+              <select
+                id="characterClass"
+                value={selectedCharacterClass}
+                onChange={(e) => setSelectedCharacterClass(e.target.value)}
+                required
+              >
+                <option value="">Select a character class</option>
+                {availableCharacterClasses.map((characterClass) => (
+                  <option key={characterClass.name} value={characterClass.name}>
+                    {characterClass.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {selectedCharacterClass && (
+          {selectedCharacterClass && selectedCharacterClass !== "God" && (
             <div className="character-class-description">
               {availableCharacterClasses.find(characterClass => characterClass.name === selectedCharacterClass)?.description}
+            </div>
+          )}
+          {selectedCharacterClass === "God" && (
+            <div className="character-class-description">
+              Special administrative class for realm owners with balanced stats. This class is only available when no other character classes exist.
             </div>
           )}
 
