@@ -9,6 +9,10 @@ import Types "./Types";
 import State "./State";
 import BufferUtils "./BufferUtils";
 import Array "mo:base/Array";
+import HashMap "mo:base/HashMap";
+import Hash "mo:base/Hash";
+import Int "mo:base/Int";
+import Class "./Class";
 
 module {
   type Room = Types.Room;
@@ -1036,6 +1040,258 @@ module {
         };
       };
       case _ { false };
+    }
+  };
+
+  // Get available classes for character creation
+  public func getAvailableClasses(state: MudState, caller: Principal) : Result.Result<[Types.Class], Text> {
+    let isRealmOwner = State.isRealmOwner(state, caller);
+    
+    // Convert classes HashMap to array, excluding God class
+    let regularClasses = Buffer.Buffer<Types.Class>(state.classes.size());
+    for ((_, classData) in state.classes.entries()) {
+      if (not classData.isAdminClass) {
+        regularClasses.add(classData);
+      };
+    };
+
+    // If no regular classes exist and caller is realm owner, add God class
+    if (regularClasses.size() == 0 and isRealmOwner) {
+      switch (state.adminClass) {
+        case (?godClass) { 
+          regularClasses.add(godClass);
+        };
+        case null { };
+      };
+    };
+
+    #ok(Buffer.toArray(regularClasses))
+  };
+
+  // Create character with specified class
+  public func createCharacterWithClass(state: MudState, caller: Principal, className: Text) : Result.Result<(), Text> {
+    // Check if player already has stats
+    switch (state.playerBaseStats.get(caller)) {
+      case (?_) { return #err("You already have a character") };
+      case null { };
+    };
+
+    // Get the class
+    let selectedClass : ?Types.Class = 
+      if (className == "God") {
+        // Special handling for God class
+        if (State.isRealmOwner(state, caller) and state.classes.size() == 0) {
+          state.adminClass;
+        } else {
+          null;
+        };
+      } else {
+        state.classes.get(className);
+      };
+
+    switch (selectedClass) {
+      case null { 
+        if (className == "God") {
+          if (not State.isRealmOwner(state, caller)) {
+            #err("Only realm owners can use the God class")
+          } else if (state.classes.size() > 0) {
+            #err("God class is only available when no other classes exist")
+          } else {
+            #err("God class not found")
+          };
+        } else {
+          #err("Invalid class selected")
+        };
+      };
+      case (?classData) {
+        // Initialize stats from class template
+        let baseStats = classData.baseStats;
+        let dynamicStats : Types.DynamicStats = {
+          hp = baseStats.maxHp;
+          mp = baseStats.maxMp;
+          xp = 0;
+          isDead = false;
+          deathTime = null;
+          xpPenaltyEndTime = null;
+        };
+
+        state.playerBaseStats.put(caller, baseStats);
+        state.playerDynamicStats.put(caller, dynamicStats);
+        #ok(())
+      };
+    };
+  };
+
+  // Create a new class with default values
+  public func createNewClass(state: MudState, caller: Principal, name: Text, description: Text) : Result.Result<(), Text> {
+    // Check if caller is a realm owner
+    if (not State.isRealmOwner(state, caller)) {
+      return #err("Only realm owners can create classes");
+    };
+
+    // Check if class name already exists
+    switch (state.classes.get(name)) {
+      case (?_) { return #err("A class with this name already exists") };
+      case null { };
+    };
+
+    // Create the class
+    let newClass = Class.createClass(name, description);
+    state.classes.put(name, newClass);
+
+    // If this is the first regular class, disable God class
+    if (state.classes.size() == 1) {
+      state.adminClass := null;
+    };
+
+    #ok(())
+  };
+
+  // Helper function to update description
+  private func updateClassDescription(classData: Types.Class, value: Text) : Types.Class {
+    {
+      name = classData.name;
+      description = value;
+      isAdminClass = classData.isAdminClass;
+      baseStats = classData.baseStats;
+      growthRates = classData.growthRates;
+    }
+  };
+
+  // Helper function to update base HP
+  private func updateClassBaseHp(classData: Types.Class, hp: Nat) : Result.Result<Types.Class, Text> {
+    if (hp < 1 or hp > 10000) {
+      #err("HP must be between 1 and 10000");
+    } else {
+      let newBaseStats = { classData.baseStats with 
+        baseHp = hp;
+        maxHp = hp + (classData.baseStats.constitution * HP_PER_CONSTITUTION);
+      };
+      #ok({
+        name = classData.name;
+        description = classData.description;
+        isAdminClass = classData.isAdminClass;
+        baseStats = newBaseStats;
+        growthRates = classData.growthRates;
+      })
+    }
+  };
+
+  // Helper function to update base MP
+  private func updateClassBaseMp(classData: Types.Class, mp: Nat) : Result.Result<Types.Class, Text> {
+    if (mp < 1 or mp > 10000) {
+      #err("MP must be between 1 and 10000");
+    } else {
+      let newBaseStats = { classData.baseStats with 
+        baseMp = mp;
+        maxMp = mp + (classData.baseStats.wisdom * MP_PER_WISDOM);
+      };
+      #ok({
+        name = classData.name;
+        description = classData.description;
+        isAdminClass = classData.isAdminClass;
+        baseStats = newBaseStats;
+        growthRates = classData.growthRates;
+      })
+    }
+  };
+
+  // Update a class attribute
+  public func updateClass(
+    state: MudState, 
+    caller: Principal, 
+    className: Text, 
+    attribute: Text, 
+    value: Text
+  ) : Result.Result<(), Text> {
+    // Check if caller is a realm owner
+    if (not State.isRealmOwner(state, caller)) {
+      return #err("Only realm owners can update classes");
+    };
+
+    // Get the class data
+    let existingData = state.classes.get(className);
+    switch (existingData) {
+      case null { return #err("Class not found") };
+      case (?data) {
+        if (data.isAdminClass) {
+          return #err("Cannot modify the God class");
+        };
+
+        // Handle each attribute type
+        let updated = if (Text.equal(attribute, "description")) {
+          updateClassDescription(data, value);
+        } else if (Text.equal(attribute, "baseHp")) {
+          switch (Nat.fromText(value)) {
+            case null { return #err("Invalid HP value") };
+            case (?hp) {
+              if (hp < 1 or hp > 10000) {
+                return #err("HP must be between 1 and 10000");
+              };
+              let newBaseStats = { data.baseStats with 
+                baseHp = hp;
+                maxHp = hp + (data.baseStats.constitution * HP_PER_CONSTITUTION);
+              };
+              {
+                name = data.name;
+                description = data.description;
+                isAdminClass = data.isAdminClass;
+                baseStats = newBaseStats;
+                growthRates = data.growthRates;
+              };
+            };
+          };
+        } else if (Text.equal(attribute, "baseMp")) {
+          switch (Nat.fromText(value)) {
+            case null { return #err("Invalid MP value") };
+            case (?mp) {
+              if (mp < 1 or mp > 10000) {
+                return #err("MP must be between 1 and 10000");
+              };
+              let newBaseStats = { data.baseStats with 
+                baseMp = mp;
+                maxMp = mp + (data.baseStats.wisdom * MP_PER_WISDOM);
+              };
+              {
+                name = data.name;
+                description = data.description;
+                isAdminClass = data.isAdminClass;
+                baseStats = newBaseStats;
+                growthRates = data.growthRates;
+              };
+            };
+          };
+        } else {
+          return #err("Unknown attribute: " # attribute);
+        };
+
+        state.classes.put(className, updated);
+        #ok(());
+      };
+    };
+  };
+
+  // List all available classes
+  public func listClasses(state: MudState, caller: Principal) : Result.Result<[Types.Class], Text> {
+    let classes = Buffer.Buffer<Types.Class>(state.classes.size());
+    for ((_, classData) in state.classes.entries()) {
+      if (not classData.isAdminClass) {
+        classes.add(classData);
+      };
+    };
+    #ok(Buffer.toArray(classes))
+  };
+
+  // Show detailed information about a specific class
+  public func showClass(state: MudState, className: Text) : Result.Result<Types.Class, Text> {
+    switch (state.classes.get(className)) {
+      case null { #err("Class not found") };
+      case (?classData) {
+        if (classData.isAdminClass) {
+          return #err("Class not found");  // Hide God class
+        };
+        #ok(classData)
+      };
     }
   };
 } 

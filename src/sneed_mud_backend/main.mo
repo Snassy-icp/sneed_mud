@@ -357,8 +357,17 @@ actor class MudBackend() = this {
   };
 
   // Character creation and stats
+  public shared(msg) func getAvailableClasses() : async Result.Result<[Types.Class], Text> {
+    Lib.getAvailableClasses(state, msg.caller)
+  };
+
+  public shared(msg) func createCharacterWithClass(className: Text) : async Result.Result<(), Text> {
+    Lib.createCharacterWithClass(state, msg.caller, className)
+  };
+
+  // Deprecate old createCharacter in favor of createCharacterWithClass
   public shared(msg) func createCharacter() : async Result.Result<(), Text> {
-    Lib.createCharacter(state, msg.caller)
+    #err("Character creation now requires selecting a class. Use createCharacterWithClass instead.")
   };
 
   public shared(msg) func getStats() : async Result.Result<Types.PlayerStats, Text> {
@@ -526,5 +535,22 @@ actor class MudBackend() = this {
         #ok(())
       };
     }
+  };
+
+  // Class management
+  public shared(msg) func createClass(name: Text, description: Text) : async Result.Result<(), Text> {
+    Lib.createNewClass(state, msg.caller, name, description)
+  };
+
+  public shared(msg) func updateClass(className: Text, attribute: Text, value: Text) : async Result.Result<(), Text> {
+    Lib.updateClass(state, msg.caller, className, attribute, value)
+  };
+
+  public shared(msg) func listClasses() : async Result.Result<[Types.Class], Text> {
+    Lib.listClasses(state, msg.caller)
+  };
+
+  public shared(msg) func showClass(className: Text) : async Result.Result<Types.Class, Text> {
+    Lib.showClass(state, className)
   };
 }

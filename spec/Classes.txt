@@ -1,0 +1,156 @@
+Class System Specification
+=======================
+
+1. Overview
+-----------
+The class system in SNEED MUD provides a data-driven framework for realm owners to create and customize character classes. Each class is defined entirely by its configurable attributes, allowing realm owners complete control over class definitions and stat progression.
+
+2. Key Components
+----------------
+- Class Definition Storage
+- Configurable Stat Templates
+- Class Selection System
+- Growth Rate Configuration
+- Realm Setup Requirements
+
+3. Detailed Mechanics
+--------------------
+Class Storage:
+- Classes stored in HashMap by name
+- Each class has unique identifier (name)
+- God class stored separately from regular classes
+- God class not counted in class existence checks
+- Class names are case-sensitive
+
+Bootstrapping Mechanism:
+- First player (realm owner) needs special handling:
+  * When no regular classes exist, assigned temporary "God" class
+  * God class has balanced, middle-ground stats
+  * God class cannot be selected by other players
+  * God class is hidden from class listings
+  * God class is automatically disabled once another class is created
+  * Realm owner can create proper classes while using God class
+  * Realm owner can later change to any created class
+
+Realm Setup Phase:
+- First connecting player can claim an unclaimed realm
+- Realm owner must create at least one class before players can register
+- Classes and rooms must exist before normal player registration
+- Realm owner operates in special admin mode for setup
+
+Class Definition:
+- Each class is a collection of configurable attributes:
+  * Name and description
+  * Base stat values
+  * Growth rate multipliers
+  * Starting primary attributes
+- All stats and multipliers are customizable
+- No hardcoded class behaviors or abilities
+- Changes to class definitions only affect new characters
+
+Class Attributes:
+Base Stats:
+- Base HP and MP
+- Physical/Magic Attack
+- Physical/Magic Defense
+- Attack Speed
+- Primary Attributes (Str, Dex, Con, Int, Wis)
+
+Growth Multipliers:
+- HP per level multiplier
+- MP per level multiplier
+- Physical Attack growth multiplier
+- Physical Defense growth multiplier
+- Magic Attack growth multiplier
+- Magic Defense growth multiplier
+- Attack Speed growth multiplier
+- Primary attribute growth effects
+
+4. Constants & Formulas
+----------------------
+Storage Keys:
+- Class HashMap key: Class name (Text)
+- God class stored separately from regular classes
+- Case-sensitive naming
+
+God Class Default Stats:
+- Base Values (balanced for basic functionality):
+  * HP: 100
+  * MP: 100
+  * Physical Attack: 10
+  * Physical Defense: 10
+  * Magic Attack: 10
+  * Magic Defense: 10
+  * Attack Speed: 100
+  * Primary Stats: All set to 10
+  * No special growth rates or multipliers
+
+Configurable Parameters (all set by realm owner):
+- Base Values:
+  * All starting stats have configurable base values
+  * All primary attributes have configurable starting values
+  * All derived stats have configurable base formulas
+
+- Growth Parameters:
+  * Base growth per level (flat value)
+  * Attribute multipliers (how much each attribute affects growth)
+  * Level multipliers (how level affects growth)
+
+Level-up Calculations:
+- For each stat:
+  * New Value = Base + (Level * Base Growth) + (Relevant Attribute * Attribute Multiplier)
+- All multipliers and base values are class-specific and configurable
+
+5. Commands & Permissions
+------------------------
+Realm Setup Commands:
+- /claim_realm - First player claims ownership of unclaimed realm
+- /create_class <name> - Creates new class with safe default values
+- /create_room <name> - Creates new room with default configuration
+
+Realm Owner Commands:
+- /update_class <name> <attribute> <value> - Updates a single class attribute
+- /list_classes - Shows all classes and their attributes
+- /show_class <name> - Shows detailed class configuration
+
+Player Commands:
+- /pick_class <name> - Initial class selection during character registration
+- /show_class <name> - View class details
+- /list_classes - List available classes
+
+Command Details:
+- /create_class initializes a new class with balanced default values
+- /update_class allows granular updates to any class attribute
+- Class attributes can be modified in any order after creation
+- Invalid numerical values are rejected with an error message
+
+6. Edge Cases & Restrictions
+--------------------------
+God Class Restrictions:
+- Only available when no other classes exist
+- Only available to realm owner
+- Cannot be modified
+- Cannot be selected by non-owners
+- Automatically disabled when first real class is created
+- Not visible in class listings
+- No special abilities or growth rates
+
+Realm Setup:
+- Only first player can claim an unclaimed realm
+- Normal player registration requires:
+  * At least one class to exist
+  * At least one room to exist
+  * Realm to be claimed by an owner
+
+Class Management:
+- Cannot delete classes with active players
+- All class attributes must have valid numerical values
+- Class names must be unique
+- Players cannot change class after selection
+- Class modifications only affect new characters
+- New classes are created with safe default values that can be modified
+- Class attributes can be updated individually after creation
+- Minimum/maximum bounds on stat values and multipliers 
+
+Implementation Notes:
+- The word "class" is a reserved keyword in Motoko and many other programming languages (including JavaScript). Use "characterClass" as the preferred variable name when implementing class-related functionality. This is clearer and more descriptive than alternatives like "classData" or "classInfo". 

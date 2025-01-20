@@ -212,4 +212,25 @@ module {
     isDead: Bool;
     deathTime: ?Int;
   };
+
+  // Class system types
+  public type Class = {
+    name: Text;
+    description: Text;
+    isAdminClass: Bool;  // True only for the temporary admin class
+    baseStats: BaseStats;
+    growthRates: ClassGrowthRates;
+  };
+
+  public type ClassGrowthRates = {
+    hpPerLevel: Nat;        // Base HP gain per level
+    mpPerLevel: Nat;        // Base MP gain per level
+    hpPerCon: Nat;         // Additional HP per point of Constitution
+    mpPerWis: Nat;         // Additional MP per point of Wisdom
+    physicalAttackPerStr: Nat;  // Physical attack bonus per Strength
+    physicalDefensePerCon: Nat; // Physical defense bonus per Constitution
+    magicAttackPerInt: Nat;    // Magic attack bonus per Intelligence
+    magicDefensePerWis: Nat;   // Magic defense bonus per Wisdom
+    attackSpeedPerDex: Nat;    // Attack speed bonus per Dexterity
+  };
 } 

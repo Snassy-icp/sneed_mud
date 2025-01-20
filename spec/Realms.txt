@@ -1,0 +1,153 @@
+Realm System Specification
+=======================
+
+1. Overview
+-----------
+SNEED MUD implements realms as individual canisters on the Internet Computer, with a central registry canister managing realm discovery and creation. Each realm is an independent game world that must be claimed and configured by a realm owner before players can join.
+
+2. Key Components
+----------------
+- Registry Canister
+- Realm Canisters
+- User Realm History
+- Realm Discovery
+- Canister Management
+
+3. Detailed Mechanics
+--------------------
+Registry Canister:
+- Maintains list of all realm canister IDs
+- Tracks user realm history (which realms they've played in)
+- Controls realm canister creation and upgrades
+- Provides realm discovery and search functionality
+- Has hardcoded list of administrator principals
+- Only administrators can upgrade registry or modify its configuration
+
+Realm Creation:
+- User requests new realm from registry
+- Registry deploys new realm canister
+- Initial configuration provided during creation:
+  * Realm name
+  * Realm description
+  * Visibility settings (public/private)
+- Registry sets requesting user's principal as realm owner
+- Realm starts in Inactive state
+- Future: Will require SNEED cryptocurrency payment
+
+Realm States:
+- Inactive: Not ready for players
+  * Default state for new realms
+  * Can be used for maintenance periods
+  * Only realm owners can access
+  * Requires minimum one class and one room to activate
+- Active: Open for player registration and gameplay
+  * All realm features available
+  * Players can join and play
+  * Can be deactivated by realm owners for maintenance
+
+Realm Metadata:
+- Name and description
+- Creation date
+- Player count
+- Visibility status
+- Owner count
+- Last active timestamp
+- Realm version
+
+4. Registry Interface
+--------------------
+Public Methods:
+- list_realms() : Returns visible realm IDs and basic metadata
+- get_realm_info(realm_id) : Returns public realm information
+- create_realm(name, description, visibility) : Creates new realm
+- get_user_realms(principal) : Returns realms user has played in
+
+Admin Methods:
+- upgrade_all_realms() : Triggers upgrade for all realm canisters
+- set_realm_creation_fee() : Sets SNEED cost for realm creation
+- set_registry_config() : Updates registry configuration parameters
+- get_registry_stats() : Returns registry metrics and status
+
+Note: All admin methods are public functions that can only be called by authorized principals.
+Initially, these are hardcoded admin principals, but will transition to the Sneed DAO
+governance canister, allowing these functions to be called via DAO proposals.
+
+Search/Filter Options:
+- By name
+- By player count
+- By creation date
+- By activity
+- Public/private status
+
+5. Commands & Permissions
+------------------------
+Registry Commands:
+- /create_realm <name> <description> - Creates new realm and sets creator as owner
+- /list_realms - Shows available realms
+- /search_realms <query> - Searches realms by name
+- /my_realms - Shows realms you've played in
+
+Realm Management:
+- /set_realm_name <name> - Updates realm name
+- /set_realm_description <desc> - Updates realm description
+- /set_realm_visibility <public|private> - Sets realm visibility
+- /activate_realm - Activates realm (requires 1 class, 1 room)
+- /deactivate_realm - Deactivates realm for maintenance
+- /add_realm_owner <player> - Adds another realm owner
+- /remove_realm_owner <player> - Removes a realm owner
+- /list_realm_owners - Shows all realm owners
+
+Player Management:
+- /list_players - Shows all registered players
+- /kick_player <name> - Removes player from realm
+- /ban_player <name> - Bans player from realm
+
+6. Edge Cases & Restrictions
+--------------------------
+Registry Management:
+- Registry canister initially has hardcoded list of administrator principals
+- Will transition to Sneed DAO governance control
+- Registry upgrades controlled by canister controller (future: Sneed DAO)
+- All admin functions exposed as public methods for DAO governance
+- Realm creation requires valid principal
+- Future: Realm creation will require SNEED payment
+
+Canister Upgrades:
+- Registry coordinates realm canister upgrades
+- Realms must support version checking
+- Upgrades must preserve realm state
+- Realms must implement upgrade hooks
+
+Realm Management:
+- Registry sets realm owner during canister creation
+- Realm owners can add or remove other owners (including themselves)
+- Must maintain at least one realm owner at all times
+- Cannot remove last realm owner
+- Realm activation requires:
+  * Minimum one class defined
+  * Minimum one room created
+- Deactivation immediately suspends all player sessions
+- Players cannot join inactive realms
+
+Player Management:
+- Cannot ban realm owners
+- Cannot kick realm owners
+- Realm owners can access inactive realms
+- Non-owners cannot access inactive realms
+
+Security:
+- Admin interface only accessible to realm owners
+- Management commands require realm owner status
+- Player access requires realm to be active
+
+7. Future Considerations
+-----------------------
+- SNEED cryptocurrency integration for realm creation
+- Realm metadata caching in registry
+- Realm backup/restore functionality
+- Inter-realm player data portability
+- Realm archival/deletion process
+- Enhanced realm discovery features
+- Private realm invite system
+- Realm activity monitoring
+- Load balancing across realms 
