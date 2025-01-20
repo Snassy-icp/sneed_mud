@@ -176,14 +176,8 @@ module {
     Buffer.toArray(players)
   };
 
-  public func broadcastToRoom(state: MudState, roomId: RoomId, content: Text) {
-    let players = getAllPlayersInRoom(state, roomId);
-    broadcastToPlayers(state, players, content, null);
-  };
-
-  public func broadcastToRoomExcept(state: MudState, roomId: RoomId, excludePrincipal: Principal, content: Text) {
-    let players = getAllPlayersInRoom(state, roomId);
-    broadcastToPlayers(state, players, content, ?excludePrincipal);
+  public func broadcastToRoom(state: MudState, roomId: RoomId, content: Text, except: [Principal]) {
+    State.broadcastToRoom(state, roomId, content, except);
   };
 
   public func getMessages(state: MudState, caller: Principal, afterId: ?MessageId) : [LogMessage] {
@@ -649,11 +643,11 @@ module {
     exitName: Text
   ) {
     // Departure messages
-    broadcastToRoomExcept(state, fromRoom.id, caller, playerName # " leaves through " # exitName);
+    broadcastToRoom(state, fromRoom.id, playerName # " leaves through " # exitName, []);
     addMessageToLog(state, caller, "You leave through " # exitName);
 
     // Arrival messages
-    broadcastToRoomExcept(state, toRoom.id, caller, playerName # " arrives from " # fromRoom.name);
+    broadcastToRoom(state, toRoom.id, playerName # " arrives from " # fromRoom.name, []);
     addMessageToLog(state, caller, "You arrive in " # toRoom.name);
 
     // Show other players in new room
@@ -1332,7 +1326,7 @@ module {
 
   // Update player activity and handle status changes
   public func updatePlayerActivity(state: MudState, principal: Principal) {
-    let oldStatus = getPlayerStatus(state, principal);
+    let oldStatus = State.getPlayerStatus(state, principal);
     state.playerLastActivity.put(principal, Time.now());
     
     // If player was offline and is now coming online, broadcast login message
@@ -1348,7 +1342,7 @@ module {
     // Auto-return from AFK when there's activity
     switch (oldStatus) {
       case (#Afk) { 
-        setPlayerStatus(state, principal, #Online);
+        State.setPlayerStatus(state, principal, #Online);
       };
       case _ {};
     };

@@ -158,7 +158,7 @@ module {
                       };
                       case _ {};
                     }
-                  }
+                  };
                   case (?fromName, null, false, true, false) {
                     // Player to room (drop) - public action
                     switch (event.from) {
@@ -168,7 +168,7 @@ module {
                         // Message to others in room
                         switch (roomId) {
                           case (?rid) {
-                            State.broadcastToRoom(state, rid, fromName # " drops " # itemType.name, []);
+                            State.broadcastToRoom(state, rid, fromName # " drops " # itemType.name, [from.owner]);
                           };
                           case null {};
                         };
@@ -185,7 +185,7 @@ module {
                         // Message to others in room
                         switch (roomId) {
                           case (?rid) {
-                            State.broadcastToRoom(state, rid, toName # " picks up " # itemType.name, []);
+                            State.broadcastToRoom(state, rid, toName # " picks up " # itemType.name, [to.owner]);
                           };
                           case null {};
                         };
@@ -748,3 +748,4 @@ module {
     }
   };
 }; 
+ 
