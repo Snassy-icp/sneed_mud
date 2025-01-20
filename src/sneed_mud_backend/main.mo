@@ -574,7 +574,7 @@ actor class MudBackend() = this {
             } else {
               playerName # " has gone AFK: " # message
             };
-            Lib.broadcastToRoom(state, roomId, afkMsg);
+            State.broadcastToRoom(state, roomId, afkMsg, []);
           };
           case null {};
         };
@@ -593,7 +593,7 @@ actor class MudBackend() = this {
         // Broadcast return message to current room
         switch (state.playerLocations.get(msg.caller)) {
           case (?roomId) {
-            Lib.broadcastToRoom(state, roomId, playerName # " is no longer AFK");
+            State.broadcastToRoom(state, roomId, playerName # " is no longer AFK", []);
           };
           case null {};
         };
@@ -611,7 +611,7 @@ actor class MudBackend() = this {
         // Broadcast logout message to current room
         switch (state.playerLocations.get(msg.caller)) {
           case (?roomId) {
-            Lib.broadcastToRoom(state, roomId, playerName # " has logged out");
+            State.broadcastToRoom(state, roomId, playerName # " has logged out", []);
           };
           case null {};
         };

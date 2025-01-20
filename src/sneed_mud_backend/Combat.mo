@@ -221,7 +221,7 @@ module {
                 switch (state.players.get(principal)) {
                   case null { return };
                   case (?name) {
-                    Lib.broadcastToRoom(state, 0, name # " has respawned.");
+                    State.broadcastToRoom(state, 0, name # " has respawned.", []);
                   };
                 };
               };
@@ -381,11 +381,11 @@ module {
                             targetName # " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
                         };
                         
-                        Lib.broadcastToRoom(state, attackerRoom, message);
+                        State.broadcastToRoom(state, attackerRoom, message, []);
                         
                         if (result.targetDied) {
                           let deathMessage = targetName # " has been defeated!";
-                          Lib.broadcastToRoom(state, attackerRoom, deathMessage);
+                          State.broadcastToRoom(state, attackerRoom, deathMessage, []);
                           checkAndHandleRespawn(state, targetPrincipal);
                         };
                       };
@@ -433,7 +433,7 @@ module {
                     state.playerLocations.put(caller, 0);
                     
                     // Broadcast respawn
-                    Lib.broadcastToRoom(state, 0, playerName # " has respawned.");
+                    State.broadcastToRoom(state, 0, playerName # " has respawned.", []);
                     
                     #ok(())
                   };

@@ -1065,7 +1065,7 @@ module {
           // Broadcast level up message
           switch (state.players.get(principal), state.playerLocations.get(principal)) {
             case (?name, ?roomId) {
-              broadcastToRoom(state, roomId, "*** " # name # " has reached level " # Nat.toText(newLevel) # "! ***");
+              State.broadcastToRoom(state, roomId, "*** " # name # " has reached level " # Nat.toText(newLevel) # "! ***", []);
             };
             case _ {};
           };
@@ -1328,5 +1328,29 @@ module {
         #ok(characterClass)
       };
     }
+  };
+
+  // Update player activity and handle status changes
+  public func updatePlayerActivity(state: MudState, principal: Principal) {
+    let oldStatus = getPlayerStatus(state, principal);
+    state.playerLastActivity.put(principal, Time.now());
+    
+    // If player was offline and is now coming online, broadcast login message
+    if (oldStatus == #Offline) {
+      switch (state.players.get(principal), state.playerLocations.get(principal)) {
+        case (?playerName, ?roomId) {
+          State.broadcastToRoom(state, roomId, playerName # " has logged in", []);
+        };
+        case _ {};
+      };
+    };
+    
+    // Auto-return from AFK when there's activity
+    switch (oldStatus) {
+      case (#Afk) { 
+        setPlayerStatus(state, principal, #Online);
+      };
+      case _ {};
+    };
   };
 } 

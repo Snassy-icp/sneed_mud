@@ -142,17 +142,23 @@ module {
                         // Message to receiver
                         Lib.addMessageToLog(state, to.owner, fromName # " gives you " # itemType.name);
                         // Message to others in room
-                        switch (roomId) {
-                          case (?rid) {
-                            broadcastToRoomExcept2(state, rid, from.owner, to.owner, 
-                              fromName # " gives " # itemType.name # " to " # toName);
+                        do {
+                          switch (roomId) {
+                            case (?rid) {
+                              State.broadcastToRoom(
+                                state, 
+                                rid, 
+                                fromName # " gives " # itemType.name # " to " # toName,
+                                [from.owner, to.owner]
+                              );
+                            };
+                            case null {};
                           };
-                          case null {};
                         };
                       };
                       case _ {};
-                    };
-                  };
+                    }
+                  }
                   case (?fromName, null, false, true, false) {
                     // Player to room (drop) - public action
                     switch (event.from) {
@@ -162,8 +168,7 @@ module {
                         // Message to others in room
                         switch (roomId) {
                           case (?rid) {
-                            Lib.broadcastToRoomExcept(state, rid, from.owner, 
-                              fromName # " drops " # itemType.name);
+                            State.broadcastToRoom(state, rid, fromName # " drops " # itemType.name, []);
                           };
                           case null {};
                         };
@@ -180,8 +185,7 @@ module {
                         // Message to others in room
                         switch (roomId) {
                           case (?rid) {
-                            Lib.broadcastToRoomExcept(state, rid, to.owner, 
-                              toName # " picks up " # itemType.name);
+                            State.broadcastToRoom(state, rid, toName # " picks up " # itemType.name, []);
                           };
                           case null {};
                         };

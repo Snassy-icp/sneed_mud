@@ -320,10 +320,69 @@ module {
     };
   };
 
+  // Helper function to broadcast a message to all players in a room, except specified principals
+  public func broadcastToRoom(state: MudState, roomId: Types.RoomId, content: Text, except: [Principal]) {
+    for ((principal, location) in state.playerLocations.entries()) {
+      if (location == roomId) {
+        // Skip if principal is in except list
+        var shouldSkip = false;
+        for (excluded in except.vals()) {
+          if (principal == excluded) {
+            shouldSkip := true;
+          };
+        };
+        if (not shouldSkip) {
+          switch (state.players.get(principal)) {
+            case (?_) {
+              switch (getPlayerStatus(state, principal)) {
+                case (#Offline) { /* Skip offline players */ };
+                case _ { 
+                  switch (state.messageLogs.get(principal)) {
+                    case null {
+                      let cb = BufferUtils.createCircularBuffer();
+                      state.messageLogs.put(principal, cb);
+                      let msg : Types.LogMessage = {
+                        id = state.stable_state.nextMessageId;
+                        timestamp = Time.now();
+                        content = content;
+                      };
+                      state.stable_state.nextMessageId += 1;
+                      BufferUtils.addToCircularBuffer(cb, msg);
+                    };
+                    case (?cb) {
+                      let msg : Types.LogMessage = {
+                        id = state.stable_state.nextMessageId;
+                        timestamp = Time.now();
+                        content = content;
+                      };
+                      state.stable_state.nextMessageId += 1;
+                      BufferUtils.addToCircularBuffer(cb, msg);
+                    };
+                  };
+                };
+              };
+            };
+            case null {}; // Skip players without names
+          };
+        };
+      };
+    };
+  };
+
   // Update player activity and handle status changes
   public func updatePlayerActivity(state: MudState, principal: Principal) {
     let oldStatus = getPlayerStatus(state, principal);
     state.playerLastActivity.put(principal, Time.now());
+    
+    // If player was offline and is now coming online, broadcast login message
+    if (oldStatus == #Offline) {
+      switch (state.players.get(principal), state.playerLocations.get(principal)) {
+        case (?playerName, ?roomId) {
+          broadcastToRoom(state, roomId, playerName # " has logged in", []);
+        };
+        case _ {};
+      };
+    };
     
     // Auto-return from AFK when there's activity
     switch (oldStatus) {
