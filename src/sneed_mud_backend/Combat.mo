@@ -16,6 +16,15 @@ module {
   // Constants
   private let RESPAWN_DELAY_NS = 60_000_000_000;   // 60 seconds until auto-respawn
   
+  // Accuracy thresholds (stored as percentage * 100)
+  private let BASE_MISS_THRESHOLD : Nat = 1000;     // 10% chance to miss
+  private let BASE_GLANCING_THRESHOLD : Nat = 4000; // 30% chance for glancing blow
+  private let BASE_CRIT_THRESHOLD : Nat = 9500;     // 5% chance to crit
+  private let DEX_ACCURACY_BONUS : Nat = 20;        // 0.2% improvement per point of Dexterity
+  private let MIN_MISS_THRESHOLD : Nat = 200;       // Minimum 2% chance to miss
+  private let MIN_GLANCING_THRESHOLD : Nat = 1000;  // Minimum 10% chance for glancing
+  private let MAX_CRIT_CHANCE : Nat = 1000;         // Maximum 10% chance to crit
+
   // Check if a player is in combat
   public func isInCombat(state: MudState, principal: Principal) : Bool {
     switch (state.playerCombatStates.get(principal)) {
@@ -26,15 +35,88 @@ module {
     };
   };
 
-  // Calculate damage based on attacker's level
-  private func calculateDamage(state: MudState, attacker: Principal) : Nat {
-    switch (state.playerBaseStats.get(attacker)) {
-      case null { 1 }; // Default damage if no stats
-      case (?stats) {
-        // Simple formula: level * 2 + 1
-        // Add explicit checks to prevent traps
-        let baseDamage = stats.level * 20;
-        baseDamage + 10
+  // Calculate attack outcome based on attacker's dexterity
+  private func calculateAttackOutcome(attackerDexterity: Nat) : {
+    isMiss: Bool;
+    isGlancing: Bool;
+    isCrit: Bool;
+  } {
+    let dexBonus = attackerDexterity * DEX_ACCURACY_BONUS;
+    
+    // Calculate adjusted thresholds
+    let missThreshold = Nat.max(MIN_MISS_THRESHOLD, 
+      if (dexBonus > BASE_MISS_THRESHOLD) { 0 } else { BASE_MISS_THRESHOLD - dexBonus });
+    
+    let glancingThreshold = Nat.max(MIN_GLANCING_THRESHOLD,
+      if (dexBonus > BASE_GLANCING_THRESHOLD) { 0 } else { BASE_GLANCING_THRESHOLD - dexBonus });
+    
+    // Crit chance increases with dexterity up to cap
+    let critThreshold = Nat.min(10000 - MAX_CRIT_CHANCE,
+      BASE_CRIT_THRESHOLD - Nat.min(dexBonus, (MAX_CRIT_CHANCE - (10000 - BASE_CRIT_THRESHOLD))));
+    
+    // Single roll for all outcomes
+    let roll = Time.now() % 10000;
+    
+    {
+      isMiss = roll < missThreshold;
+      isGlancing = not (roll < missThreshold) and roll < glancingThreshold;
+      isCrit = roll >= critThreshold;
+    }
+  };
+
+  // Calculate damage based on attacker and target stats
+  private func calculateDamage(state: MudState, attacker: Principal, target: Principal) : { 
+    damage: Nat; 
+    wasCrit: Bool; 
+    wasGlancing: Bool;
+    wasMiss: Bool;
+  } {
+    switch (state.playerBaseStats.get(attacker), state.playerBaseStats.get(target)) {
+      case (null, _) { { 
+        damage = 1; 
+        wasCrit = false; 
+        wasGlancing = false;
+        wasMiss = false;
+      } }; // Default if no attacker stats
+      case (_, null) { { 
+        damage = 1; 
+        wasCrit = false; 
+        wasGlancing = false;
+        wasMiss = false;
+      } }; // Default if no target stats
+      case (?attackerStats, ?targetStats) {
+        // Calculate accuracy outcome
+        let outcome = calculateAttackOutcome(attackerStats.dexterity);
+        
+        if (outcome.isMiss) {
+          return { 
+            damage = 0; 
+            wasCrit = false; 
+            wasGlancing = false;
+            wasMiss = true;
+          };
+        };
+
+        // Calculate base damage
+        let attack = attackerStats.physicalAttack;
+        let defense = targetStats.physicalDefense;
+        let baseDamage = (attack * 100) / (100 + defense);
+        
+        // Apply outcome modifiers
+        let finalDamage = if (outcome.isCrit) {
+          baseDamage * 2  // Critical hit: 200% damage
+        } else if (outcome.isGlancing) {
+          (baseDamage * 60) / 100  // Glancing blow: 60% damage
+        } else {
+          baseDamage  // Normal hit: 100% damage
+        };
+
+        { 
+          damage = finalDamage;
+          wasCrit = outcome.isCrit;
+          wasGlancing = outcome.isGlancing;
+          wasMiss = false;
+        }
       };
     };
   };
@@ -168,12 +250,12 @@ module {
                       return #err("Target is already dead");
                     };
 
-                    // Calculate and apply damage
-                    let damage = calculateDamage(state, attacker);
-                    let targetNewHp = if (damage >= targetStats.hp) { 
+                    // Calculate damage and get combat results
+                    let result = calculateDamage(state, attacker, target);
+                    let targetNewHp = if (result.damage >= targetStats.hp) { 
                       0 
                     } else { 
-                      targetStats.hp - damage 
+                      targetStats.hp - result.damage 
                     };
                     let targetDied = targetNewHp == 0;
 
@@ -208,7 +290,7 @@ module {
                     updateCombatState(state, target, false);
 
                     #ok({
-                      damage = damage;
+                      damage = result.damage;
                       attackerNewHp = attackerStats.hp;
                       targetNewHp = targetNewHp;
                       counterDamage = null;
@@ -251,9 +333,22 @@ module {
                     // Broadcast attack result
                     switch (state.players.get(attacker), state.players.get(targetPrincipal)) {
                       case (?attackerName, ?targetName) {
-                        let message = attackerName # " attacks " # targetName # 
-                          " for " # Nat.toText(result.damage) # " damage! " #
-                          targetName # " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
+                        let damageResult = calculateDamage(state, attacker, targetPrincipal);
+                        
+                        // Build the combat message
+                        let message = if (damageResult.wasMiss) {
+                          attackerName # " attacks " # targetName # " but misses!";
+                        } else if (damageResult.wasGlancing) {
+                          attackerName # " lands a glancing blow on " # targetName # 
+                            " for " # Nat.toText(result.damage) # " damage! " #
+                            targetName # " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
+                        } else {
+                          let hitType = if (damageResult.wasCrit) { " CRITICAL HIT! " } else { " " };
+                          attackerName # " attacks " # targetName # "." # hitType # 
+                            "Deals " # Nat.toText(result.damage) # " damage! " #
+                            targetName # " has " # Nat.toText(result.targetNewHp) # " HP remaining.";
+                        };
+                        
                         Lib.broadcastToRoom(state, attackerRoom, message);
                         
                         if (result.targetDied) {

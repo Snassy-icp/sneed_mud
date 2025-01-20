@@ -67,18 +67,40 @@ Action-Based Combat System:
 - Attack Speed directly reduces cooldown durations
 - All calculations performed at time of action
 
+Accuracy System:
+- Single roll system (0-10000) determines all combat outcomes
+- Base chances (modified by Dexterity):
+  * Miss: 10% base → 2% minimum
+  * Glancing: 30% chance → 10% minimum
+  * Normal hit: Default outcome
+  * Critical: 5% base → 10% maximum
+
+Dexterity Effects:
+- Each point provides 0.2% improvement
+- Shifts thresholds to favor better outcomes
+- Improves both offensive (crit) and defensive (miss reduction) aspects
+- Cannot reduce miss chance below 2%
+- Cannot increase crit chance above 10%
+
+Damage Modifiers:
+- Miss: 0% damage
+- Glancing: 60% damage
+- Normal hit: 100% damage
+- Critical hit: 200% damage
+
 Timing System:
 - Global Cooldown: 2.5s minimum between actions
+- Basic Attack Cooldown: 5 seconds (reduced by Attack Speed)
+- Combat Duration: 20 seconds
 - Attack Speed Effect:
   * 100% speed = normal cooldowns
   * 150% speed = cooldowns reduced by 33%
   * Maximum reduction cap: 50% (200% Attack Speed)
-- All cooldowns checked at time of action attempt
 
 Action Types:
 1. Basic Attack
    - Physical damage based on Physical Attack
-   - Can be dodged or critical hit
+   - Uses accuracy system for hit determination
    - 5 second cooldown (reduced by Attack Speed)
    - Subject to global cooldown
 
@@ -286,40 +308,48 @@ Phase 1: Core Stats System
 Phase 2: Combat System Modernization
 ----------------------------------
 4. Timestamp-Based Combat State
-   - Remove any tick-based logic
-   - Add timestamp tracking to combat state
-   - Update combat state validation
-   - Test combat entry/exit
+   * - Remove any tick-based logic
+   * - Add timestamp tracking to combat state
+   * - Update combat state validation
+   * - Test combat entry/exit
 
 5. Cooldown System
-   - Implement global cooldown (2.5s)
-   - Add timestamp-based cooldown tracking
-   - Separate global and ability-specific cooldowns
-   - Update action validation
-   - Test rapid action attempts
+   * - Implement global cooldown (2.5s)
+   * - Add timestamp-based cooldown tracking
+   * - Separate global and ability-specific cooldowns
+   * - Update action validation
+   * - Test rapid action attempts
 
 6. Attack Speed Integration
-   - Implement cooldown reduction formula
-   - Add Attack Speed effects to ability cooldowns only
-   - Test with various speed values
-   - Verify maximum reduction cap
+   * - Implement cooldown reduction formula
+   * - Add Attack Speed effects to ability cooldowns only
+   * - Test with various speed values
+   * - Verify maximum reduction cap
+
+7. New Accuracy System
+   - Implement unified roll system
+   - Add miss/glancing/normal/crit thresholds
+   - Implement Dexterity scaling
+   - Add damage modifiers
+   - Test all combat outcomes
+   - Update combat messages
 
 Phase 3: Status Effects
 ----------------------
-7. Status Effect Foundation
+8. Status Effect Foundation
    - Create new status effect data structure
    - Add timestamp tracking
    - Implement effect calculation logic
    - Test basic duration tracking
 
-8. Effect Types
+9. Effect Types
    - Implement Bleeding
    - Implement Burning
    - Add Stunned state
    - Add Speed modifications
    - Test effect stacking
 
-9. Effect Resolution
+10. Effect Resolution
    - Add on-action effect calculations
    - Implement effect cleanup
    - Test long-duration effects
@@ -327,19 +357,19 @@ Phase 3: Status Effects
 
 Phase 4: Group Combat
 --------------------
-10. Basic Party System
+11. Basic Party System
     - Implement party data structure
     - Add party commands
     - Test party formation/dissolution
     - Verify size limits
 
-11. Damage Attribution
+12. Damage Attribution
     - Add damage tracking per combat
     - Implement contribution calculation
     - Test multi-player combat
     - Verify attribution accuracy
 
-12. Group Bonuses
+13. Group Bonuses
     - Add group size bonuses
     - Implement stat modifications
     - Test in combat scenarios
@@ -347,13 +377,13 @@ Phase 4: Group Combat
 
 Phase 5: Equipment & Progression
 ------------------------------
-13. Equipment System
+14. Equipment System
     - Update weapon types
     - Implement armor categories
     - Add equipment bonuses
     - Test equipment changes
 
-14. XP System
+15. XP System
     - Implement new XP formula
     - Add level-up mechanics
     - Test progression curve
@@ -361,13 +391,13 @@ Phase 5: Equipment & Progression
 
 Phase 6: Polish & Integration
 ---------------------------
-15. Frontend Integration
+16. Frontend Integration
     - Update query loop
     - Add cooldown UI
     - Implement status effect display
     - Add group UI elements
 
-16. Testing & Balancing
+17. Testing & Balancing
     - Full system integration testing
     - Performance testing
     - Balance adjustments
