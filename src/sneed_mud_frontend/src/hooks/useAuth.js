@@ -26,6 +26,12 @@ export function useAuth() {
     if (process.env.DFX_NETWORK === "local" || process.env.DFX_NETWORK === undefined) {
       agent.fetchRootKey();
     }
+    
+    // Ensure the identity is still valid
+    if (!authClient.isAuthenticated()) {
+      throw new Error("Session expired");
+    }
+    
     const actor = Actor.createActor(idlFactory, {
       agent,
       canisterId: process.env.CANISTER_ID_SNEED_MUD_BACKEND,
@@ -39,21 +45,32 @@ export function useAuth() {
     setAuthClient(client);
     
     if (await client.isAuthenticated()) {
-      const identity = client.getIdentity();
-      const principalId = identity.getPrincipal().toString();
-      setPrincipal(principalId);
-      setIsAuthenticated(true);
-      
-      const actor = await createAuthenticatedActor(identity);
-      
       try {
-        const principalObj = Principal.fromText(principalId);
-        const nameOpt = await actor.getPlayerName(principalObj);
-        if (nameOpt && Array.isArray(nameOpt) && nameOpt.length > 0) {
-          setPlayerName(nameOpt[0]);
+        const identity = client.getIdentity();
+        const principalId = identity.getPrincipal().toString();
+        setPrincipal(principalId);
+        setIsAuthenticated(true);
+        
+        const actor = await createAuthenticatedActor(identity);
+        
+        try {
+          const principalObj = Principal.fromText(principalId);
+          const nameOpt = await actor.getPlayerName(principalObj);
+          if (nameOpt && Array.isArray(nameOpt) && nameOpt.length > 0) {
+            setPlayerName(nameOpt[0]);
+          }
+        } catch (error) {
+          console.error("Error checking initial player name:", error);
+          // If we get a signature error, try to re-authenticate
+          if (error.toString().includes("Invalid signature")) {
+            console.log("Session expired, logging out...");
+            await logout();
+          }
         }
       } catch (error) {
-        console.error("Error checking initial player name:", error);
+        console.error("Error during authentication:", error);
+        // Clear invalid auth state
+        await logout();
       }
     }
     setIsLoading(false);

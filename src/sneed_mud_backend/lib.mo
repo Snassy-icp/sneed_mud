@@ -495,6 +495,10 @@ module {
       };
     };
 
+    // Initialize player's online status and activity timestamp
+    State.setPlayerStatus(state, caller, #Online);
+    State.updatePlayerActivity(state, caller);
+
     // Check if name is already taken
     switch (State.findPrincipalByName(state, name)) {
       case (?_existingPrincipal) {
