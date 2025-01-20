@@ -101,6 +101,7 @@ export function useAuth() {
       const nameOpt = await actor.getPlayerName(principalObj);
       if (Array.isArray(nameOpt) && nameOpt.length > 0) {
         setPlayerName(nameOpt[0]);
+        await actor.updateActivity();  // Update activity status when logged in with existing name
       }
     } catch (error) {
       console.error("Error checking player name after login:", error);
@@ -108,6 +109,13 @@ export function useAuth() {
   }
 
   async function logout() {
+    if (authenticatedActor) {
+      try {
+        await authenticatedActor.logout();
+      } catch (error) {
+        console.error("Error during backend logout:", error);
+      }
+    }
     await authClient?.logout();
     setPrincipal(null);
     setPlayerName(null);
