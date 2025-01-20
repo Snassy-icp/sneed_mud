@@ -177,7 +177,9 @@ module {
   public type CombatState = {
     inCombat: Bool;
     combatEndTime: Int;    // Time when combat state expires
-    lastAttackTime: Int;   // For cooldown tracking
+    lastGlobalCooldown: Int;   // For global cooldown tracking
+    lastBasicAttack: Int;      // For basic attack cooldown
+    abilityCooldowns: [(Text, Int)];  // Placeholder for future abilities: (abilityId, timestamp)
   };
 
   public type AttackResult = {

@@ -28,7 +28,7 @@ module {
   let BASE_PHYSICAL_DEFENSE : Nat = 5;
   let BASE_MAGIC_ATTACK : Nat = 10;
   let BASE_MAGIC_DEFENSE : Nat = 5;
-  let BASE_ATTACK_SPEED : Nat = 10000;  // 100% stored as 10000
+  public let BASE_ATTACK_SPEED : Nat = 10000;  // 100% stored as 10000
   let BASE_CRIT_CHANCE : Nat = 500;     // 5% stored as 500
 
   // Constants for level scaling
@@ -47,6 +47,25 @@ module {
   let SPEED_PER_DEXTERITY : Nat = 50;  // 0.5% per point stored as 50
   let DODGE_PER_DEXTERITY : Nat = 50;  // 0.5% per point
   let CRIT_PER_DEXTERITY : Nat = 20;   // 0.2% per point
+
+  // Constants for combat timings
+  public let GLOBAL_COOLDOWN_NS : Int = 2_500_000_000;  // 2.5 seconds
+  public let BASIC_ATTACK_COOLDOWN_NS : Int = 5_000_000_000;  // 5 seconds
+  public let COMBAT_DURATION_NS : Int = 20_000_000_000;  // 20 seconds
+
+  // Attack speed constants
+  public let MAX_ATTACK_SPEED_REDUCTION : Nat = 5000;  // Maximum 50% reduction
+
+  // Calculate cooldown reduction based on attack speed
+  public func calculateReducedCooldown(baseCooldown: Int, attackSpeed: Nat) : Int {
+    let reduction = if (attackSpeed <= BASE_ATTACK_SPEED) {
+      0  // No reduction if speed is 100% or less
+    } else {
+      let speedBonus = Nat.min(attackSpeed - BASE_ATTACK_SPEED, MAX_ATTACK_SPEED_REDUCTION);
+      (baseCooldown * speedBonus) / BASE_ATTACK_SPEED
+    };
+    baseCooldown - reduction
+  };
 
   // Create initial base stats for a new character
   private func createInitialBaseStats() : Types.BaseStats {

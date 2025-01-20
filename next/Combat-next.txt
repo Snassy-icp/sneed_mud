@@ -79,7 +79,8 @@ Action Types:
 1. Basic Attack
    - Physical damage based on Physical Attack
    - Can be dodged or critical hit
-   - 2.5 second cooldown
+   - 5 second cooldown (reduced by Attack Speed)
+   - Subject to global cooldown
 
 2. Special Abilities
    - Unlocked at specific levels
@@ -216,9 +217,9 @@ Respawn Options:
 7. Constants & Formulas
 ----------------------
 Combat Timings:
-- Base Round: 5 seconds
+- Global Cooldown: 2.5 seconds (fixed, not affected by Attack Speed)
+- Basic Attack Cooldown: 5 seconds (reduced by Attack Speed)
 - Combat Duration: 20 seconds
-- Global Cooldown: 2.5 seconds
 
 Damage Formula:
 Physical Damage = (Attack * (100 / (100 + Defense))) * (1 + Critical)
@@ -260,23 +261,26 @@ IMPLEMENTATION PLAN
 This plan outlines the steps to transition from current system to proposed specification.
 Each step should be implemented, tested, and stable before proceeding.
 
+[* indicates completed items]
+
 Phase 1: Core Stats System
 -------------------------
 1. Implement new Base Values and Level Scaling
-   - Add base value constants
-   - Add level scaling constants
-   - Update stat calculations
-   - Test with existing combat
+   * - Add base value constants
+   * - Add level scaling constants
+   * - Update stat calculations
+   * - Test with existing combat
 
 2. Expand Primary Attributes
-   - Add missing attribute fields
-   - Update existing attribute calculations
-   - Add new derived stats
-   - Test attribute point allocation
+   * - Add missing attribute fields
+   * - Update existing attribute calculations
+   * - Add new derived stats
+   * - Test attribute point allocation
 
 3. Update Derived Stats
-   - Implement new formulas
-   - Add Attack Speed modifications
+   * - Implement new formulas
+   * - Add Attack Speed modifications
+   - Add equipment modifiers
    - Test stat scaling at different levels
 
 Phase 2: Combat System Modernization
@@ -290,12 +294,13 @@ Phase 2: Combat System Modernization
 5. Cooldown System
    - Implement global cooldown (2.5s)
    - Add timestamp-based cooldown tracking
+   - Separate global and ability-specific cooldowns
    - Update action validation
    - Test rapid action attempts
 
 6. Attack Speed Integration
    - Implement cooldown reduction formula
-   - Add Attack Speed effects
+   - Add Attack Speed effects to ability cooldowns only
    - Test with various speed values
    - Verify maximum reduction cap
 
