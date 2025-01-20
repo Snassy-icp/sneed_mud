@@ -924,9 +924,17 @@ module {
         switch (state.playerDynamicStats.get(caller)) {
           case null { #err("No character found") };
           case (?dynamicStats) {
+            let nextLevelXp = State.xpForNextLevel(baseStats.level);
             let stats : Types.PlayerStats = {
               base = baseStats;
               dynamic = dynamicStats;
+              xpForNextLevel = nextLevelXp;
+              xpNeeded = nextLevelXp - dynamicStats.xp;
+              // Convert percentages to 4 decimal places (10000 = 1.0000)
+              attackSpeedPercent = baseStats.attackSpeed * 10000 / 100;
+              baseAttackSpeedPercent = baseStats.baseAttackSpeed * 10000 / 100;
+              dodgeChancePercent = baseStats.dodgeChance * 10000 / 100;
+              criticalChancePercent = baseStats.criticalChance * 10000 / 100;
             };
             #ok(stats)
           };

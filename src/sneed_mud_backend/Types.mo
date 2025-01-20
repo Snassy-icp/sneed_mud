@@ -144,6 +144,13 @@ module {
   public type PlayerStats = {
     base: BaseStats;
     dynamic: DynamicStats;
+    xpForNextLevel: Nat;
+    xpNeeded: Nat;
+    // Percentages as decimals (multiplied by 10000 for 4 decimal precision)
+    attackSpeedPercent: Nat;
+    baseAttackSpeedPercent: Nat;
+    dodgeChancePercent: Nat;
+    criticalChancePercent: Nat;
   };
 
   // Token metadata types

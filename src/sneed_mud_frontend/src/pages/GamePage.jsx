@@ -190,13 +190,13 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
   }
 
   const formatStats = (stats) => {
-    const nextLevelXp = calculateXpForNextLevel(stats.base.level);
-    const xpNeeded = nextLevelXp - stats.dynamic.xp;
+    // Convert to BigInt for division
+    const PERCENT_DIVISOR = 10000n;
     
     return [
       // Basic Info
       `Level: ${stats.base.level}`,
-      `XP: ${stats.dynamic.xp}/${nextLevelXp} (${xpNeeded} more needed for next level)`,
+      `XP: ${stats.dynamic.xp}/${stats.xpForNextLevel} (${stats.xpNeeded} more needed for next level)`,
       '',
       // Current Status
       `HP: ${stats.dynamic.hp}/${stats.base.maxHp}`,
@@ -216,9 +216,9 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       `Magic Defense: ${stats.base.magicDefense} (Base: ${stats.base.baseMagicDefense})`,
       '',
       // Combat Modifiers
-      `Attack Speed: ${stats.base.attackSpeed / 100}% (Base: ${stats.base.baseAttackSpeed / 100}%)`,
-      `Dodge Chance: ${stats.base.dodgeChance / 100}%`,
-      `Critical Chance: ${stats.base.criticalChance / 100}%`
+      `Attack Speed: ${Number(BigInt(stats.attackSpeedPercent) * 100n / PERCENT_DIVISOR) / 100}% (Base: ${Number(BigInt(stats.baseAttackSpeedPercent) * 100n / PERCENT_DIVISOR) / 100}%)`,
+      `Dodge Chance: ${Number(BigInt(stats.dodgeChancePercent) * 100n / PERCENT_DIVISOR) / 100}%`,
+      `Critical Chance: ${Number(BigInt(stats.criticalChancePercent) * 100n / PERCENT_DIVISOR) / 100}%`
     ].join('\n');
   };
 
@@ -228,11 +228,6 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       `HP: ${stats.dynamic.hp}/${stats.base.maxHp}`,
       `MP: ${stats.dynamic.mp}/${stats.base.maxMp}`
     ].join('\n');
-  };
-
-  // Helper function to calculate XP needed for next level
-  const calculateXpForNextLevel = (level) => {
-    return Math.floor(2000 * Math.pow(1.1, level - 1));
   };
 
   async function fetchMessages() {

@@ -19,14 +19,6 @@ This document lists the core technical assumptions that inform the design of all
 - IC handles all command queuing and state transaction management natively
 - Frontend maintains a query loop for state updates, but cannot drive backend "ticks"
 
-Impact:
-- All game systems must be designed with these constraints in mind
-- Timing values in specifications must allow for these latencies
-- User interface must account for expected delays
-- Game mechanics should feel natural despite these constraints
-- All time-based calculations must be done at the moment of user interaction
-- Systems must be designed around explicit state changes, not continuous updates
-
 3. Data Formatting and Display Principles
 ---------------------------------------
 - Backend sends only structured data, never pre-formatted strings
@@ -38,9 +30,22 @@ Impact:
   d) Clear separation of concerns between data and presentation
   e) Ability to support multiple display formats/languages
 
+4. Derived Value Calculations
+---------------------------
+- All game mechanic calculations must be performed on the backend
+- Frontend should never recalculate values that affect gameplay
+- This ensures:
+  a) Consistent game mechanics across all clients
+  b) Single source of truth for game formulas
+  c) No floating-point or type conversion issues between languages
+  d) Easier testing and validation of game mechanics
+  e) Simpler frontend code focused on display logic
+
 Impact:
 - All backend responses should use well-defined data structures
 - Text formatting and layout is handled exclusively by frontend
 - Message logs and display text generated from structured data
 - Frontend maintains responsibility for "pretty printing" all data
-- Changes to display format only require frontend updates 
+- Changes to display format only require frontend updates
+- Game mechanics and calculations performed only on backend
+- Frontend displays pre-calculated values without modification
