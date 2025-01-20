@@ -630,6 +630,9 @@ Admin Commands (Realm Owners only):
   /create_item_type "Name", "Description", is_container, container_capacity, "icon_url", stack_max - Create a new item type
   /create_item "Item Name"|type_id [count] - Create a new item
   /create_class "Name", "Description" - Create a new character class
+  /update_class "Class Name", "attribute", "value" - Update a character class attribute
+  /list_classes - Show all character classes and their descriptions
+  /show_class <name> - Show detailed information about a character class
 
 Help:
   /help, /? - Show this help message`]);
@@ -1520,6 +1523,112 @@ Help:
           }
         } catch (error) {
           setMessages(prev => [...prev, 'Error: Create class command format is \'/create_class "Class Name", "Class Description"\'']);
+        }
+        return;
+      }
+
+      // Handle show_class command
+      if (command.toLowerCase().startsWith('/show_class ')) {
+        const className = command.substring(command.indexOf(' ') + 1).trim();
+        try {
+          const result = await authenticatedActor.showCharacterClass(className);
+          if ('ok' in result) {
+            const characterClass = result.ok;
+            const baseStats = characterClass.baseStats;
+            const growthRates = characterClass.growthRates;
+            
+            setMessages(prev => [...prev, 
+              `Character Class: ${characterClass.name}`,
+              characterClass.description,
+              "",
+              "Base Stats:",
+              `HP: ${baseStats.baseHp}`,
+              `MP: ${baseStats.baseMp}`,
+              `Physical Attack: ${baseStats.basePhysicalAttack}`,
+              `Physical Defense: ${baseStats.basePhysicalDefense}`,
+              `Magic Attack: ${baseStats.baseMagicAttack}`,
+              `Magic Defense: ${baseStats.baseMagicDefense}`,
+              `Attack Speed: ${baseStats.baseAttackSpeed}`,
+              "",
+              "Primary Attributes:",
+              `Strength: ${baseStats.strength}`,
+              `Dexterity: ${baseStats.dexterity}`,
+              `Constitution: ${baseStats.constitution}`,
+              `Intelligence: ${baseStats.intelligence}`,
+              `Wisdom: ${baseStats.wisdom}`,
+              "",
+              "Growth Rates:",
+              `HP per Level: ${growthRates.hpPerLevel}`,
+              `MP per Level: ${growthRates.mpPerLevel}`,
+              `HP per Constitution: ${growthRates.hpPerCon}`,
+              `MP per Wisdom: ${growthRates.mpPerWis}`,
+              `Physical Attack per Strength: ${growthRates.physicalAttackPerStr}`,
+              `Physical Defense per Constitution: ${growthRates.physicalDefensePerCon}`,
+              `Magic Attack per Intelligence: ${growthRates.magicAttackPerInt}`,
+              `Magic Defense per Wisdom: ${growthRates.magicDefensePerWis}`,
+              `Attack Speed per Dexterity: ${growthRates.attackSpeedPerDex}`
+            ]);
+          } else {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error showing character class:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
+      }
+
+      // Handle list_classes command
+      if (command === '/list_classes') {
+        try {
+          const result = await authenticatedActor.listCharacterClasses();
+          if ('ok' in result) {
+            const classes = result.ok;
+            if (classes.length === 0) {
+              setMessages(prev => [...prev, "No character classes available."]);
+            } else {
+              setMessages(prev => [
+                ...prev,
+                "Available Character Classes:",
+                ...classes.map(c => `${c.name} - ${c.description}`)
+              ]);
+            }
+          } else {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error listing character classes:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
+      }
+
+      // Handle update_class command
+      if (command.toLowerCase().startsWith('/update_class ')) {
+        const argsString = command.substring(command.indexOf(' ') + 1).trim();
+        
+        try {
+          // Match format: "Class Name", "attribute", "value"
+          const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"$/);
+          if (!matches) {
+            setMessages(prev => [...prev, 'Error: Update class command format is \'/update_class "Class Name", "attribute", "value"\'']);
+            return;
+          }
+          
+          const [_, className, attribute, value] = matches;
+          try {
+            const result = await authenticatedActor.updateCharacterClass(className, attribute, value);
+            if ('err' in result) {
+              setMessages(prev => [...prev, `Error: ${result.err}`]);
+            } else {
+              setMessages(prev => [...prev, `Successfully updated ${attribute} for character class "${className}"`]);
+            }
+          } catch (error) {
+            console.error("Error updating character class:", error);
+            setMessages(prev => [...prev, `Error: ${error.message}`]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, 'Error: Update class command format is \'/update_class "Class Name", "attribute", "value"\'']);
         }
         return;
       }
