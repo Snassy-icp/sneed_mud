@@ -186,14 +186,14 @@ button {
 
 // Game Components
 .text-log {
-  background-color: #000;
-  color: #0f0;
+  background-color: #1a1a1a;
+  color: #e0e0e0;
   font-family: 'Courier New', monospace;
   padding: 1rem;
   flex: 1;
   overflow-y: auto;
   margin-bottom: 1rem;
-  border: 1px solid #0f0;
+  border: 1px solid #333;
   min-height: 200px;
   width: 100%;
   display: block;
@@ -203,7 +203,7 @@ button {
     margin-bottom: 0.5rem;
     line-height: 1.4;
     white-space: pre-wrap;
-    color: #0f0 !important;
+    color: #ffffff !important;
     display: block;
     width: 100%;
   }
@@ -223,16 +223,16 @@ button {
     margin-bottom: 1rem;
 
     .exit-button {
-      background-color: #000;
-      color: #0f0;
-      border: 1px solid #0f0;
+      background-color: #2a2a2a;
+      color: #ffffff;
+      border: 1px solid #444;
       padding: 0.5rem 1rem;
       cursor: pointer;
       font-family: 'Courier New', monospace;
 
       &:hover {
-        background-color: #0f0;
-        color: #000;
+        background-color: #3a3a3a;
+        color: #ffffff;
       }
     }
   }
@@ -243,25 +243,139 @@ button {
 
     .command-input {
       flex: 1;
-      background-color: #000;
-      color: #0f0;
-      border: 1px solid #0f0;
+      background-color: #2a2a2a;
+      color: #ffffff;
+      border: 1px solid #444;
       padding: 0.5rem;
       font-family: 'Courier New', monospace;
     }
 
     .command-button {
-      background-color: #000;
-      color: #0f0;
-      border: 1px solid #0f0;
+      background-color: #2a2a2a;
+      color: #ffffff;
+      border: 1px solid #444;
       padding: 0.5rem 1rem;
       cursor: pointer;
       font-family: 'Courier New', monospace;
       
       &:hover {
-        background-color: #0f0;
-        color: #000;
+        background-color: #3a3a3a;
+        color: #ffffff;
       }
+    }
+  }
+}
+
+// Mobile-first media query
+@media (max-width: 768px) {
+  .header {
+    .header-content {
+      flex-direction: column;
+      gap: 1rem;
+      text-align: center;
+
+      nav {
+        flex-direction: column;
+        width: 100%;
+        
+        button, a {
+          width: 100%;
+          padding: 0.8rem;
+          font-size: 1rem;
+        }
+      }
+    }
+  }
+
+  .main-content {
+    padding: 1rem;
+  }
+
+  // Adjust game interface for mobile
+  .game-interface {
+    padding-bottom: 1rem;
+
+    .text-log {
+      max-height: calc(100vh - 300px); // Smaller on mobile to accommodate keyboard
+      font-size: 14px; // Slightly smaller font for mobile
+    }
+  }
+
+  // Make room interface more touch-friendly
+  .room-interface {
+    padding: 0.5rem;
+
+    .available-exits {
+      .exit-button {
+        padding: 0.8rem 1.2rem; // Larger touch targets
+        font-size: 1rem;
+        min-width: 80px; // Ensure buttons are wide enough to tap
+      }
+    }
+
+    .command-form {
+      flex-direction: column;
+      gap: 0.8rem;
+
+      .command-input {
+        padding: 0.8rem;
+        font-size: 1rem;
+      }
+
+      .command-button {
+        padding: 0.8rem;
+        font-size: 1rem;
+        width: 100%;
+      }
+    }
+  }
+
+  // Adjust registration and login pages
+  .registration-page, .login-page {
+    .registration-container, .login-container {
+      width: 90%;
+      margin: 1rem;
+      
+      input, select, button {
+        padding: 0.8rem;
+        font-size: 1rem;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    }
+  }
+
+  // Principal display adjustments
+  .principal-container {
+    word-break: break-all;
+    max-width: 100%;
+    
+    code {
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+// Add touch-friendly focus states
+@media (hover: none) {
+  button:hover {
+    background-color: #646cff; // Reset hover state on touch devices
+  }
+
+  button:active {
+    background-color: #747bff; // Use active state instead
+  }
+}
+
+// Improve text readability
+.text-log {
+  .log-message {
+    // ... existing code ...
+    @media (max-width: 768px) {
+      padding: 0.3rem 0;
     }
   }
 }
