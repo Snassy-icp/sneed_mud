@@ -1347,4 +1347,49 @@ module {
       case _ {};
     };
   };
+
+  public func teleport(state: MudState, caller: Principal, targetRoomId: ?RoomId) : Result.Result<Room, Text> {
+    // Check if player is registered
+    switch (state.players.get(caller)) {
+      case null { return #err("You need to register a name first") };
+      case (?playerName) {
+        let roomId = switch(targetRoomId) {
+          // If no room specified, use starting room
+          case null { starting_room };
+          // If room specified, check if caller is realm owner
+          case (?id) {
+            if (not State.isRealmOwner(state, caller)) {
+              return #err("Only realm owners can teleport to specific rooms");
+            };
+            id
+          };
+        };
+
+        // Check if target room exists
+        switch (state.rooms.get(roomId)) {
+          case null { return #err("Target room not found") };
+          case (?targetRoom) {
+            // Get current room for departure message
+            switch (getCurrentRoom(state, caller)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(currentRoom)) {
+                // Don't teleport if already in target room
+                if (currentRoom.id == roomId) {
+                  return #err("You are already there");
+                };
+
+                // Broadcast departure/arrival messages
+                State.broadcastToRoom(state, currentRoom.id, playerName # " vanishes in a puff of smoke.", [caller]);
+                State.broadcastToRoom(state, roomId, playerName # " appears in a puff of smoke.", [caller]);
+                
+                // Move player
+                state.playerLocations.put(caller, roomId);
+                return #ok(targetRoom);
+              };
+            };
+          };
+        };
+      };
+    }
+  };
 } 

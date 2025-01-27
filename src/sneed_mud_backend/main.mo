@@ -706,4 +706,8 @@ actor class MudBackend() = this {
     
     #ok(Buffer.toArray(allPlayers))
   };
+
+  public shared(msg) func teleport(roomId: ?Types.RoomId) : async Result.Result<Types.Room, Text> {
+    Lib.teleport(state, msg.caller, roomId)
+  };
 }

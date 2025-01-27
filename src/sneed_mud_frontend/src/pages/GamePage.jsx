@@ -750,6 +750,14 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             type: 'system'
           },
           {
+            content: "  /teleport - Return to the starting room",
+            type: 'system'
+          },
+          {
+            content: "  /teleport <room_id> - (Realm Owners only) Teleport to a specific room",
+            type: 'system'
+          },
+          {
             content: "  /create_exit \"Exit ID\", \"Exit Name\", \"Exit Description\", target_room_id[, \"direction\"] - Create an exit",
             type: 'system'
           },
@@ -2330,6 +2338,44 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           }
         } catch (error) {
           console.error("Error getting all players:", error);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
+        }
+        return;
+      }
+
+      // Handle teleport command
+      if (command.toLowerCase().startsWith('/teleport')) {
+        try {
+          let roomId = null;
+          // Check if a room ID was provided
+          if (command.length > 9) { // More than just "/teleport"
+            const roomIdStr = command.substring(command.indexOf(' ') + 1).trim();
+            roomId = parseInt(roomIdStr);
+            if (isNaN(roomId)) {
+              setMessages(prev => [...prev, {
+                content: "Error: Room ID must be a number",
+                type: 'error'
+              }]);
+              return;
+            }
+          }
+
+          // Try to teleport
+          const result = await authenticatedActor.teleport(roomId ? [roomId] : []);
+          if ('err' in result) {
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
+          } else {
+            // Room update will happen automatically
+            await updateCurrentRoom();
+          }
+        } catch (error) {
+          console.error("Error teleporting:", error);
           setMessages(prev => [...prev, {
             content: `Error: ${error.message}`,
             type: 'error'
