@@ -307,6 +307,7 @@ button {
 
       &.message-exit {
         color: #b19cd9; // Light purple for exits
+        font-weight: 500;
         &.interactive-element {
           cursor: pointer;
           text-decoration: underline dotted;

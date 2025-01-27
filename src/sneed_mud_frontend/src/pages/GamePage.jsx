@@ -274,81 +274,6 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     }
   }
 
-  // Helper function to recursively get container contents
-  async function getContainerContentsRecursive(containerId, depth = 0) {
-    if (depth > 5) return []; // Prevent infinite recursion, limit depth to 5 levels
-    
-    console.log("Getting contents for container:", containerId);
-    const contentsResult = await authenticatedActor.getContainerContents(BigInt(containerId));
-    console.log("Raw contents result:", contentsResult);
-    
-    if (!('ok' in contentsResult)) {
-      console.log("Error getting container contents:", contentsResult);
-      return [];
-    }
-    
-    const contents = contentsResult.ok;
-    console.log("Raw contents array:", contents);
-    const messages = [];
-    
-    if (contents.length > 0) {
-      // Group contents by type
-      const groupedContents = new Map();
-      for (const itemId of contents) {
-        console.log("Getting item details for:", itemId);
-        const itemResult = await authenticatedActor.getItem(BigInt(itemId));
-        console.log("Item result:", itemResult);
-        if ('ok' in itemResult) {
-          const containerItem = itemResult.ok;
-          console.log("Container item:", containerItem);
-          const key = containerItem.item_type.name;
-          const count = groupedContents.get(key)?.count || 0n;  // Initialize as BigInt
-          groupedContents.set(key, {
-            id: containerItem.id,
-            count: count + BigInt(containerItem.count),  // Convert and add as BigInt
-            isContainer: containerItem.item_type.is_container,
-            isOpen: containerItem.is_open,
-            type: containerItem.item_type
-          });
-        }
-      }
-      
-      // Display grouped contents
-      for (const [name, info] of groupedContents) {
-        const countStr = info.count > 1n ? ` (x${info.count})` : '';
-        const containerStatus = info.isContainer ? 
-          ` [${info.isOpen ? 'open' : 'closed'}]` : 
-          '';
-        const indent = '  '.repeat(depth + 1);
-        messages.push({
-          content: `${indent}${name}${countStr}${containerStatus}`,
-          type: 'room'
-        });
-        
-        // Recursively get contents of nested containers
-        if (info.isContainer && info.isOpen) {
-          const nestedContents = await getContainerContentsRecursive(info.id, depth + 1);
-          if (nestedContents.length > 0) {
-            messages.push(...nestedContents);
-          } else if (depth < 5) { // Only show "empty" message if we haven't hit depth limit
-            messages.push({
-              content: `${indent}  (empty)`,
-              type: 'room'
-            });
-          }
-        }
-      }
-    } else {
-      const indent = '  '.repeat(depth + 1);
-      messages.push({
-        content: `${indent}(empty)`,
-        type: 'room'
-      });
-    }
-    
-    return messages;
-  }
-
   useEffect(() => {
     if (isAuthenticated && authenticatedActor && playerName) {
       updateCurrentRoom();
@@ -986,6 +911,9 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           return;
         }
 
+        console.log("Current room data:", currentRoom);
+        console.log("Room exits:", currentRoom.exits);
+
         // Check if looking at a specific target
         if (command.toLowerCase().startsWith('/look ') || command.toLowerCase().startsWith('/l ')) {
           const targetName = command.substring(command.indexOf(' ') + 1).trim();
@@ -1151,95 +1079,74 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
         const roomMessages = [
           {
-            content: `${currentRoom.name}`,
-            type: 'room'
+            type: 'room',
+            parts: [
+              { 
+                type: 'room',
+                content: currentRoom.name,
+                entityId: currentRoom.id,
+                interactable: {
+                  tooltip: 'Click to examine room',
+                  actions: {
+                    click: `/examine room ${currentRoom.id}`
+                  }
+                }
+              }
+            ]
           },
           {
-            content: currentRoom.description,
-            type: 'system'
-          },
-          {
-            content: "",
-            type: 'system'
+            type: 'room',
+            parts: [{ type: 'text', content: currentRoom.description }]
           }
         ];
 
-        if (playersInRoom.length > 0) {
-          const otherPlayers = playersInRoom.filter(([principal, name]) => name !== playerName);
-          if (otherPlayers.length > 0) {
-            roomMessages.push({
-              type: 'system',
-              parts: [
-                { type: 'text', content: 'You see:' }
-              ]
-            });
-            
-            otherPlayers.forEach(([playerPrincipal, name]) => {
-              roomMessages.push({
-                type: 'system',
-                parts: [
-                  { type: 'text', content: '  ' },
-                  { 
-                    type: 'player',
-                    content: name,
-                    entityId: playerPrincipal,
-                    interactable: {
-                      tooltip: 'Click to examine player',
-                      actions: {
-                        click: `/look ${name}`
-                      }
-                    }
-                  },
-                  { type: 'text', content: ' is here.' }
-                ]
-              });
-            });
-            
-            roomMessages.push({
-              type: 'system',
-              parts: [{ type: 'text', content: '' }]
-            });
-          }
-        }
-
-        const itemsResult = await authenticatedActor.getRoomItems(currentRoom.id);
-        if ('ok' in itemsResult) {
-          const items = itemsResult.ok;
-          if (items.length > 0) {
-            roomMessages.push({
-              content: "You also see:",
-              type: 'system'
-            });
-            items.forEach(item => {
-              const countStr = item.count > 1 ? ` (x${item.count})` : '';
-              roomMessages.push({
-                content: `  ${item.item_type.name}${countStr}`,
-                type: 'item'
-              });
-            });
-            roomMessages.push({
-              content: "",
-              type: 'system'
-            });
-          }
-        }
-
+        // Add exits section
         if (currentRoom.exits && currentRoom.exits.length > 0) {
           roomMessages.push({
-            content: "Obvious exits:",
-            type: 'system'
+            type: 'room',
+            parts: [
+              { type: 'text', content: '\nObvious exits:\n' },
+              ...currentRoom.exits.flatMap(([exitId, exit], index) => [
+                { type: 'text', content: '  ' },
+                {
+                  type: 'exit',
+                  content: exit.direction?.length > 0 ? exit.direction[0] : exit.name,
+                  entityId: exitId,
+                  interactable: {
+                    tooltip: exit.description || `Exit to ${exit.name}`,
+                    actions: {
+                      click: `/go ${exitId}`
+                    }
+                  }
+                },
+                { type: 'text', content: index < currentRoom.exits.length - 1 ? '\n' : '' }
+              ])
+            ]
           });
-          currentRoom.exits.forEach(([_, exit]) => {
-            const directionStr = exit.direction ? ` (${exit.direction})` : '';
-            roomMessages.push({
-              content: `  ${exit.name}${directionStr}`,
-              type: 'system'
-            });
-          });
-        } else {
+        }
+
+        // Add items section
+        if (currentRoom.items && currentRoom.items.length > 0) {
           roomMessages.push({
-            content: "There are no obvious exits.",
-            type: 'system'
+            type: 'room',
+            parts: [
+              { type: 'text', content: '\nYou see:\n' },
+              ...currentRoom.items.flatMap((item, index) => [
+                { type: 'text', content: '  ' },
+                {
+                  type: 'item',
+                  content: item.name + (item.count > 1 ? ` (x${item.count})` : ''),
+                  entityId: item.id,
+                  interactable: {
+                    tooltip: `${item.description}\n${item.isContainer ? (item.isOpen ? '[open]' : '[closed]') : ''}`,
+                    actions: {
+                      click: `/examine ${item.id}`
+                    }
+                  }
+                },
+                { type: 'text', content: index < currentRoom.items.length - 1 ? '\n' : '' }
+              ])
+            ]
           });
         }
 
