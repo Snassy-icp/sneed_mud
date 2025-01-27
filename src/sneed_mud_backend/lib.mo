@@ -495,49 +495,12 @@ module {
 
     // Check if name is already taken
     switch (State.findPrincipalByName(state, name)) {
-      case (?_existingPrincipal) {
-        return #err("Name is already taken");
-      };
+      case (?_existingPrincipal) { #err("Name already taken") };
       case null {
-        // Check if player already has a name
-        switch (state.players.get(caller)) {
-          case (?existingName) {
-            return #err("You already have a name: " # existingName);
-          };
-          case null {
-            // Register the new name
-            state.players.put(caller, name);
-            state.usedNames.put(name, caller);
-            
-            // Create character stats
-            switch (createCharacter(state, caller)) {
-              case (#err(e)) { return #err(e) };
-              case (#ok(_)) {
-                // Add welcome message to player's log
-                addMessageToLog(state, caller, "Welcome to the game, " # name # "! Your character has been created with starting stats.");
-                
-                // Place player in starting room (room 0) if it exists
-                switch (state.rooms.get(starting_room)) {
-                  case (?room) {
-                    state.playerLocations.put(caller, starting_room);
-                    
-                    // Broadcast entry message to non-offline players
-                    let players = getAllPlayersInRoom(state, starting_room);
-                    broadcastToPlayers(state, players, name # " has entered the game", ?caller);
-                    
-                    // Show other players in the room
-                    showPlayersInRoom(state, starting_room, caller);
-                    
-                    return #ok("Successfully registered as " # name # " and entered the starting room");
-                  };
-                  case null {
-                    return #ok("Successfully registered as " # name # " (no starting room available)");
-                  };
-                };
-              };
-            };
-          };
-        };
+        state.players.put(caller, name);
+        state.playerLocations.put(caller, starting_room);
+        State.updatePlayerActivity(state, caller);  // This is good - it will set them as Online via lastActivity
+        #ok("Welcome " # name)
       };
     };
   };
@@ -733,6 +696,7 @@ module {
   };
 
   public func say(state: MudState, caller: Principal, message: Text) : Result.Result<(), Text> {
+    State.updatePlayerActivity(state, caller);
     switch (state.players.get(caller)) {
       case null { #err("You need to register a name first") };
       case (?playerName) {
@@ -743,9 +707,6 @@ module {
             switch (state.playerLocations.get(caller)) {
               case null { #err("You're not in any room") };
               case (?roomId) {
-                // Update sender's activity timestamp
-                State.updatePlayerActivity(state, caller);
-
                 // Get death status for message prefix
                 let prefix = switch (state.playerDynamicStats.get(caller)) {
                   case (?stats) { if (stats.isDead) { "*GHOST* " } else { "" } };
@@ -769,42 +730,34 @@ module {
 
   public func whisper(state: MudState, caller: Principal, targetName: Text, message: Text) : Result.Result<(), Text> {
     switch (state.players.get(caller)) {
-      case null { #err("You need to register a name first") };
+      case null { return #err("You need to register a name first") };
       case (?senderName) {
-        // Check if player can communicate
-        switch (State.canPerformAction(state, caller, #Communication)) {
-          case (#err(e)) { return #err(e) };
-          case (#ok(_)) {
-            // Find target principal by name
-            switch (State.findPrincipalByName(state, targetName)) {
-              case null { #err("Player not found: " # targetName) };
-              case (?targetPrincipal) {
-                // Update sender's activity timestamp
-                State.updatePlayerActivity(state, caller);
+        State.updatePlayerActivity(state, caller);
+        // Find target principal by name
+        switch (State.findPrincipalByName(state, targetName)) {
+          case null { #err("Player not found: " # targetName) };
+          case (?targetPrincipal) {
+            // Get death status for message prefix
+            let prefix = switch (state.playerDynamicStats.get(caller)) {
+              case (?stats) { if (stats.isDead) { "*GHOST* " } else { "" } };
+              case null { "" };
+            };
 
-                // Get death status for message prefix
-                let prefix = switch (state.playerDynamicStats.get(caller)) {
-                  case (?stats) { if (stats.isDead) { "*GHOST* " } else { "" } };
-                  case null { "" };
-                };
+            // Deliver message to target with ghost prefix if dead
+            addMessageToLog(state, targetPrincipal, prefix # senderName # " whispers: " # message);
+            addMessageToLog(state, caller, "You whisper to " # targetName # ": " # message);
 
-                // Deliver message to target with ghost prefix if dead
-                addMessageToLog(state, targetPrincipal, prefix # senderName # " whispers: " # message);
-                addMessageToLog(state, caller, "You whisper to " # targetName # ": " # message);
-
-                // Check target's status and send auto-reply if needed
-                switch (State.getPlayerStatus(state, targetPrincipal)) {
-                  case (#Online) { /* No auto-reply needed */ };
-                  case (#Afk) { 
-                    addMessageToLog(state, caller, targetName # " is currently AFK and will see your message later");
-                  };
-                  case (#Offline) {
-                    addMessageToLog(state, caller, targetName # " is currently offline and will see your message later");
-                  };
-                };
-                #ok(())
+            // Check target's status and send auto-reply if needed
+            switch (State.getPlayerStatus(state, targetPrincipal)) {
+              case (#Online) { /* No auto-reply needed */ };
+              case (#Afk) { 
+                addMessageToLog(state, caller, targetName # " is currently AFK and will see your message later");
+              };
+              case (#Offline) {
+                addMessageToLog(state, caller, targetName # " is currently offline and will see your message later");
               };
             };
+            #ok(())
           };
         };
       };
@@ -1095,11 +1048,12 @@ module {
       };
     };
 
-    #ok(Buffer.toArray(regularCharacterClasses))
+    #ok(Buffer.toArray(regularCharacterClasses));
   };
 
   // Create character with specified character class
   public func createCharacterWithClass(state: MudState, caller: Principal, characterClassName: Text) : Result.Result<(), Text> {
+    State.updatePlayerActivity(state, caller);
     // Check if player already has stats
     switch (state.playerBaseStats.get(caller)) {
       case (?_) { return #err("You already have a character") };
@@ -1349,10 +1303,12 @@ module {
   };
 
   public func teleport(state: MudState, caller: Principal, targetRoomId: ?RoomId) : Result.Result<Room, Text> {
-    // Check if player is registered
     switch (state.players.get(caller)) {
       case null { return #err("You need to register a name first") };
       case (?playerName) {
+        // Add activity update at the start of any player action
+        State.updatePlayerActivity(state, caller);
+        
         let roomId = switch(targetRoomId) {
           // If no room specified, use starting room
           case null { starting_room };
@@ -1391,5 +1347,53 @@ module {
         };
       };
     }
+  };
+
+  public func look(state: MudState, caller: Principal, target: ?Text) : Result.Result<(), Text> {
+    State.updatePlayerActivity(state, caller);
+    switch (state.players.get(caller)) {
+      case null { return #err("You need to register a name first") };
+      case (?playerName) {
+        switch (state.playerLocations.get(caller)) {
+          case null { return #err("You're not in any room") };
+          case (?roomId) {
+            // When showing players in room:
+            let playersHere = Buffer.Buffer<Text>(0);
+            for ((principal, name) in getAllPlayersInRoom(state, roomId).vals()) {
+              if (principal != caller) {  // Don't show self
+                switch (State.getPlayerStatus(state, principal)) {
+                  case (#Offline) { /* Skip offline players */ };
+                  case (#Afk) { playersHere.add(name # " (AFK)") };
+                  case (#Online) { playersHere.add(name) };
+                };
+              };
+            };
+            // Add message to log
+            addMessageToLog(state, caller, "You look around.");
+            #ok(())
+          };
+        };
+      };
+    };
+  };
+
+  public func getAllPlayers(state: MudState) : Result.Result<[Types.PlayerInfo], Text> {
+    let allPlayers = Buffer.Buffer<Types.PlayerInfo>(0);
+    
+    for ((principal, name) in state.players.entries()) {
+      let status = State.getPlayerStatus(state, principal);
+      let className = switch (state.playerBaseStats.get(principal)) {
+        case (?baseStats) { "Some Class" }; // Replace with actual class lookup
+        case null { "Unknown" };
+      };
+      
+      allPlayers.add({
+        name = name;
+        characterClass = className;
+        status = status;
+        afkMessage = null;
+      });
+    };
+    #ok(Buffer.toArray(allPlayers))
   };
 } 
