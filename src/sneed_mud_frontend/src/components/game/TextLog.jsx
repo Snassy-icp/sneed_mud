@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
+import MessageLine from './MessageLine';
 
-function TextLog({ messages }) {
+const TextLog = ({ messages, onCommand }) => {
   const logRef = useRef(null);
 
   useEffect(() => {
@@ -9,15 +10,28 @@ function TextLog({ messages }) {
     }
   }, [messages]);
 
+  if (messages.length === 0) {
+    return (
+      <div className="text-log" ref={logRef}>
+        <MessageLine 
+          message={{ content: 'No messages yet...', type: 'system' }}
+          onCommand={onCommand}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="text-log" ref={logRef}>
       {messages.map((message, index) => (
-        <div key={index} className="log-message">
-          {message}
-        </div>
+        <MessageLine 
+          key={index} 
+          message={message}
+          onCommand={onCommand}
+        />
       ))}
     </div>
   );
-}
+};
 
 export default TextLog; 

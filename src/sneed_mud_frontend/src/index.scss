@@ -198,14 +198,187 @@ button {
   width: 100%;
   display: block;
   max-height: calc(100vh - 400px);
+  position: relative;
 
   .log-message {
     margin-bottom: 0.5rem;
     line-height: 1.4;
     white-space: pre-wrap;
-    color: #ffffff !important;
     display: block;
     width: 100%;
+
+    // Message type styles
+    &.message-error {
+      color: #ff4444;
+    }
+
+    &.message-combat {
+      color: #ff6b6b;
+      font-weight: 500;
+    }
+
+    &.message-system {
+      color: #ffd93d;
+    }
+
+    &.message-chat {
+      color: #98ff98;
+    }
+
+    &.message-room {
+      color: #87ceeb;
+      font-style: italic;
+    }
+
+    &.message-item {
+      color: #dda0dd;
+      
+      .interactive-element {
+        cursor: pointer;
+        text-decoration: underline dotted;
+        
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+
+    &.message-movement {
+      color: #b19cd9;
+    }
+
+    &.message-info {
+      color: #ffffff;
+    }
+
+    .message-part {
+      // Base styles for all parts
+      &.message-player {
+        color: #98ff98; // Light green for players
+        &.interactive-element {
+          cursor: pointer;
+          text-decoration: underline dotted;
+          
+          &:hover {
+            text-decoration: underline;
+            background-color: rgba(152, 255, 152, 0.1);
+          }
+        }
+      }
+
+      &.message-item {
+        color: #dda0dd; // Plum for items
+        &.interactive-element {
+          cursor: pointer;
+          text-decoration: underline dotted;
+          
+          &:hover {
+            text-decoration: underline;
+            background-color: rgba(221, 160, 221, 0.1);
+          }
+        }
+      }
+
+      &.message-monster {
+        color: #ff6b6b; // Soft red for monsters
+        &.interactive-element {
+          cursor: pointer;
+          text-decoration: underline dotted;
+          
+          &:hover {
+            text-decoration: underline;
+            background-color: rgba(255, 107, 107, 0.1);
+          }
+        }
+      }
+
+      &.message-room {
+        color: #87ceeb; // Sky blue for rooms
+        &.interactive-element {
+          cursor: pointer;
+          text-decoration: underline dotted;
+          
+          &:hover {
+            text-decoration: underline;
+            background-color: rgba(135, 206, 235, 0.1);
+          }
+        }
+      }
+
+      &.message-exit {
+        color: #b19cd9; // Light purple for exits
+        &.interactive-element {
+          cursor: pointer;
+          text-decoration: underline dotted;
+          
+          &:hover {
+            text-decoration: underline;
+            background-color: rgba(177, 156, 217, 0.1);
+          }
+        }
+      }
+
+      &.message-text {
+        color: #ffffff; // White for regular text
+      }
+    }
+  }
+
+  .interactive-element {
+    position: relative;
+    
+    // Desktop tooltip
+    @media (hover: hover) {
+      &:hover::after {
+        content: attr(data-tooltip);
+        position: fixed;
+        transform: translate(-50%, -100%);
+        left: var(--mouse-x, 50%);
+        top: var(--mouse-y, 0);
+        padding: 4px 8px;
+        background-color: rgba(0, 0, 0, 0.9);
+        border: 1px solid #444;
+        border-radius: 4px;
+        font-size: 14px;
+        white-space: pre-wrap;
+        max-width: 200px;
+        z-index: 1000;
+        pointer-events: none;
+      }
+    }
+
+    // Mobile tooltip
+    .mobile-tooltip {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 12px 16px;
+      background-color: rgba(0, 0, 0, 0.95);
+      border: 1px solid #444;
+      border-radius: 8px;
+      font-size: 16px;
+      white-space: pre-wrap;
+      max-width: 80%;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      
+      // Add a semi-transparent backdrop
+      &::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1;
+      }
+    }
+
+    &.showing-tooltip {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
   }
 }
 
@@ -377,5 +550,12 @@ button {
     @media (max-width: 768px) {
       padding: 0.3rem 0;
     }
+  }
+}
+
+// Hide desktop tooltips on touch devices
+@media (hover: none) {
+  .interactive-element::after {
+    display: none !important;
   }
 }

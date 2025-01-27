@@ -240,7 +240,13 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         const uniqueNewMessages = newMessages.filter(msg => BigInt(msg.id) > currentLastId);
         
         if (uniqueNewMessages.length > 0) {
-          setMessages(prev => [...prev, ...uniqueNewMessages.map(msg => msg.content)]);
+          setMessages(prev => [...prev, ...uniqueNewMessages.map(msg => ({
+            type: msg.type || 'info',
+            parts: msg.parts || [{ 
+              type: 'text',
+              content: msg.content // Handle legacy messages
+            }]
+          }))]);
           const newLastId = BigInt(uniqueNewMessages[uniqueNewMessages.length - 1].id);
           if (newLastId > currentLastId) {
             setLastMessageId(newLastId);
@@ -309,12 +315,15 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       
       // Display grouped contents
       for (const [name, info] of groupedContents) {
-        const countStr = info.count > 1n ? ` (x${info.count})` : '';  // Compare with BigInt
+        const countStr = info.count > 1n ? ` (x${info.count})` : '';
         const containerStatus = info.isContainer ? 
           ` [${info.isOpen ? 'open' : 'closed'}]` : 
           '';
         const indent = '  '.repeat(depth + 1);
-        messages.push(`${indent}${name}${countStr}${containerStatus}`);
+        messages.push({
+          content: `${indent}${name}${countStr}${containerStatus}`,
+          type: 'room'
+        });
         
         // Recursively get contents of nested containers
         if (info.isContainer && info.isOpen) {
@@ -322,13 +331,19 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if (nestedContents.length > 0) {
             messages.push(...nestedContents);
           } else if (depth < 5) { // Only show "empty" message if we haven't hit depth limit
-            messages.push(`${indent}  (empty)`);
+            messages.push({
+              content: `${indent}  (empty)`,
+              type: 'room'
+            });
           }
         }
       }
     } else {
       const indent = '  '.repeat(depth + 1);
-      messages.push(`${indent}(empty)`);
+      messages.push({
+        content: `${indent}(empty)`,
+        type: 'room'
+      });
     }
     
     return messages;
@@ -387,10 +402,16 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             }
 
           } catch (error) {
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } else {
-          setMessages(prev => [...prev, "Transfer cancelled."]);
+          setMessages(prev => [...prev, {
+            content: "Transfer cancelled.",
+            type: 'system'
+          }]);
         }
         setPendingTransfer(null);
         return;
@@ -412,17 +433,24 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           );
           setMessages(prev => [
             ...prev,
-            "Wallet:",
-            `Principal: ${principal}`,
-            ...balances.map(b => {
-              const errorStr = b.error ? ` (Error: ${b.error})` : '';
-              const refreshStr = b.needsRefresh ? ' (Metadata needs refresh - use /wallet refresh)' : '';
-              const canisterStr = b.canisterId ? ` [${b.canisterId}]` : '';
-              return `${b.symbol} (${b.name}): ${b.formatted}${errorStr}${refreshStr}${canisterStr}`;
-            })
+            {
+              content: "Wallet:",
+              type: 'system'
+            },
+            {
+              content: `Principal: ${principal}`,
+              type: 'system'
+            },
+            ...balances.map(b => ({
+              content: `${b.symbol} (${b.name}): ${b.formatted}${b.error ? ` (Error: ${b.error})` : ''}${b.needsRefresh ? ' (Metadata needs refresh - use /wallet refresh)' : ''}${b.canisterId ? ` [${b.canisterId}]` : ''}`,
+              type: 'system'
+            }))
           ]);
         } catch (error) {
-          setMessages(prev => [...prev, `Error fetching balances: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error fetching balances: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -431,7 +459,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         const newPreferences = { ...walletPreferences, hideZeroBalances: true };
         setWalletPreferences(newPreferences);
         saveWalletPreferences(newPreferences);
-        setMessages(prev => [...prev, "Zero balances will be hidden in wallet display"]);
+        setMessages(prev => [...prev, {
+          content: "Zero balances will be hidden in wallet display",
+          type: 'system'
+        }]);
         return;
       }
 
@@ -439,7 +470,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         const newPreferences = { ...walletPreferences, hideZeroBalances: false };
         setWalletPreferences(newPreferences);
         saveWalletPreferences(newPreferences);
-        setMessages(prev => [...prev, "All balances will be shown in wallet display"]);
+        setMessages(prev => [...prev, {
+          content: "All balances will be shown in wallet display",
+          type: 'system'
+        }]);
         return;
       }
 
@@ -447,7 +481,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (command.startsWith('/send ')) {
         const match = command.match(/^\/send (\d+\.?\d*) (\w+) to (.+)$/);
         if (!match) {
-          setMessages(prev => [...prev, "Invalid send command. Format: /send <amount> <token> to <recipient>"]);
+          setMessages(prev => [...prev, {
+            content: "Invalid send command. Format: /send <amount> <token> to <recipient>",
+            type: 'error'
+          }]);
           return;
         }
 
@@ -466,7 +503,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
               t.metadata && t.metadata.symbol === tokenSymbol
             );
             if (!token || !token.metadata) {
-              setMessages(prev => [...prev, `Unknown token: ${tokenSymbol}. Make sure it's registered and metadata is up to date.`]);
+              setMessages(prev => [...prev, {
+                content: `Unknown token: ${tokenSymbol}. Make sure it's registered and metadata is up to date.`,
+                type: 'error'
+              }]);
               return;
             }
             decimals = token.metadata.decimals;
@@ -489,19 +529,28 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
                 targetPrincipal = recipient;
                 recipientName = recipient; // Just use the principal as the name if not a player
               } catch (error) {
-                setMessages(prev => [...prev, `Error: "${recipient}" is neither a valid player name nor a valid principal ID`]);
+                setMessages(prev => [...prev, {
+                  content: `Error: "${recipient}" is neither a valid player name nor a valid principal ID`,
+                  type: 'error'
+                }]);
                 return;
               }
             }
           } catch (error) {
-            setMessages(prev => [...prev, `Error looking up recipient: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error looking up recipient: ${error.message}`,
+              type: 'error'
+            }]);
             return;
           }
 
-          setMessages(prev => [...prev, 
-            `Are you sure you want to send ${amountStr} ${tokenSymbol} to ${recipientName} (principal: ${targetPrincipal})?`,
-            "Type 'yes' to confirm."
-          ]);
+          setMessages(prev => [...prev, {
+            content: `Are you sure you want to send ${amountStr} ${tokenSymbol} to ${recipientName} (principal: ${targetPrincipal})?`,
+            type: 'system'
+          }, {
+            content: "Type 'yes' to confirm.",
+            type: 'system'
+          }]);
 
           setPendingTransfer({
             tokenSymbol,
@@ -511,7 +560,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             senderName: playerName
           });
         } catch (error) {
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -566,7 +618,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           }
 
         } catch (error) {
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         setPendingTransfer(null);
         return;
@@ -577,12 +632,18 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const result = await authenticatedActor.respawn();
           if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
           // Success message comes from backend via message polling
         } catch (error) {
           console.error("Error respawning:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -591,59 +652,218 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (command === '/help' || command === '/?') {
         setMessages(prev => [
           ...prev,
-          "Available commands:",
-          "",
-          "Movement:",
-          "  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)",
-          "",
-          "Communication:",
-          "  /say <message>, /s <message> - Say something to everyone in the room",
-          "  /whisper <player> <message>, /w <player> <message> - Send a private message to a player",
-          "",
-          "Combat:",
-          "  /attack <player> - Attack another player in the same room",
-          "  /respawn - Return to the starting point after death (60 second cooldown)",
-          "",
-          "Items:",
-          "  /inventory, /i - Show your inventory",
-          "  /look [target], /l [target] - Look around the room or examine a specific target",
-          "  /pick <item> [count], /take <item> [count] - Pick up an item from the room",
-          "  /drop <item> [count] - Drop an item in the current room",
-          "  /give <item> to <player> [count] - Give an item to another player",
-          "",
-          "Containers:",
-          "  /open <container> - Open a container",
-          "  /close <container> - Close a container",
-          "  /put <item> in|into <container> [count] - Put an item into a container",
-          "",
-          "Character:",
-          "  /stats - Show your character's stats (Level, HP, MP, XP)",
-          "  /create - Create character stats if you don't have them",
-          "",
-          "Status:",
-          "  /online - Show all online players",
-          "  /players - Show all registered players",
-          "  /afk [message] - Set yourself as AFK with optional message",
-          "  /back - Return from AFK",
-          "",
-          "Wallet:",
-          "  /wallet - Show your wallet balances and principal",
-          "  /wallet hide_zero - Hide zero balances in wallet display",
-          "  /wallet show_zero - Show all balances in wallet display",
-          "  /send <amount> <token> to <recipient> - Send tokens to a player or principal",
-          "",
-          "Admin Commands (Realm Owners only):",
-          `  /create_room \"Room Name\", \"Room Description\" - Create a new room`,
-          `  /create_exit \"Exit ID\", \"Exit Name\", \"Exit Description\", target_room_id[, \"direction\"] - Create an exit`,
-          `  /create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max - Create item type`,
-          `  /create_item \"Item Name\"|type_id [count] - Create a new item`,
-          `  /create_class \"Name\", \"Description\" - Create a new character class`,
-          `  /update_class \"Class Name\", \"attribute\", \"value\" - Update a character class attribute`,
-          "  /list_classes - Show all character classes and their descriptions",
-          "  /show_class <name> - Show detailed information about a character class",
-          "",
-          "Help:",
-          "  /help, /? - Show this help message"
+          {
+            content: "Available commands:",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Movement:",
+            type: 'system'
+          },
+          {
+            content: "  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Communication:",
+            type: 'system'
+          },
+          {
+            content: "  /say <message>, /s <message> - Say something to everyone in the room",
+            type: 'system'
+          },
+          {
+            content: "  /whisper <player> <message>, /w <player> <message> - Send a private message to a player",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Combat:",
+            type: 'system'
+          },
+          {
+            content: "  /attack <player> - Attack another player in the same room",
+            type: 'system'
+          },
+          {
+            content: "  /respawn - Return to the starting point after death (60 second cooldown)",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Items:",
+            type: 'system'
+          },
+          {
+            content: "  /inventory, /i - Show your inventory",
+            type: 'system'
+          },
+          {
+            content: "  /look [target], /l [target] - Look around the room or examine a specific target",
+            type: 'system'
+          },
+          {
+            content: "  /pick <item> [count], /take <item> [count] - Pick up an item from the room",
+            type: 'system'
+          },
+          {
+            content: "  /drop <item> [count] - Drop an item in the current room",
+            type: 'system'
+          },
+          {
+            content: "  /give <item> to <player> [count] - Give an item to another player",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Containers:",
+            type: 'system'
+          },
+          {
+            content: "  /open <container> - Open a container",
+            type: 'system'
+          },
+          {
+            content: "  /close <container> - Close a container",
+            type: 'system'
+          },
+          {
+            content: "  /put <item> in|into <container> [count] - Put an item into a container",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Character:",
+            type: 'system'
+          },
+          {
+            content: "  /stats - Show your character's stats (Level, HP, MP, XP)",
+            type: 'system'
+          },
+          {
+            content: "  /create - Create character stats if you don't have them",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Status:",
+            type: 'system'
+          },
+          {
+            content: "  /online - Show all online players",
+            type: 'system'
+          },
+          {
+            content: "  /players - Show all registered players",
+            type: 'system'
+          },
+          {
+            content: "  /afk [message] - Set yourself as AFK with optional message",
+            type: 'system'
+          },
+          {
+            content: "  /back - Return from AFK",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Wallet:",
+            type: 'system'
+          },
+          {
+            content: "  /wallet - Show your wallet balances and principal",
+            type: 'system'
+          },
+          {
+            content: "  /wallet hide_zero - Hide zero balances in wallet display",
+            type: 'system'
+          },
+          {
+            content: "  /wallet show_zero - Show all balances in wallet display",
+            type: 'system'
+          },
+          {
+            content: "  /send <amount> <token> to <recipient> - Send tokens to a player or principal",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Admin Commands (Realm Owners only):",
+            type: 'system'
+          },
+          {
+            content: "  /create_room \"Room Name\", \"Room Description\" - Create a new room",
+            type: 'system'
+          },
+          {
+            content: "  /create_exit \"Exit ID\", \"Exit Name\", \"Exit Description\", target_room_id[, \"direction\"] - Create an exit",
+            type: 'system'
+          },
+          {
+            content: "  /create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max - Create item type",
+            type: 'system'
+          },
+          {
+            content: "  /create_item \"Item Name\"|type_id [count] - Create a new item",
+            type: 'system'
+          },
+          {
+            content: "  /create_class \"Name\", \"Description\" - Create a new character class",
+            type: 'system'
+          },
+          {
+            content: "  /update_class \"Class Name\", \"attribute\", \"value\" - Update a character class attribute",
+            type: 'system'
+          },
+          {
+            content: "  /list_classes - Show all character classes and their descriptions",
+            type: 'system'
+          },
+          {
+            content: "  /show_class <name> - Show detailed information about a character class",
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          },
+          {
+            content: "Help:",
+            type: 'system'
+          },
+          {
+            content: "  /help, /? - Show this help message",
+            type: 'system'
+          }
         ]);
         return;
       }
@@ -654,12 +874,18 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const result = await authenticatedActor.attack(targetName);
           if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
           // Success message comes from backend via message polling
         } catch (error) {
           console.error("Error attacking:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -670,7 +896,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         const matchingExitId = findMatchingExit(exitCommand, currentRoom?.exits);
         
         if (!matchingExitId) {
-          setMessages(prev => [...prev, `No matching exit found for '${exitCommand}'`]);
+          setMessages(prev => [...prev, {
+            content: `No matching exit found for '${exitCommand}'`,
+            type: 'error'
+          }]);
           return;
         }
 
@@ -679,11 +908,17 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if ('ok' in result) {
             await updateCurrentRoom();
           } else if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error executing command:", error);
-          setMessages(prev => [...prev, `Error: Failed to use exit - ${error.message || 'Unknown error'}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: Failed to use exit - ${error.message || 'Unknown error'}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -695,11 +930,17 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           try {
             const result = await authenticatedActor.say(message);
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             }
           } catch (error) {
             console.error("Error saying message:", error);
-            setMessages(prev => [...prev, `Error: Failed to say message - ${error.message || 'Unknown error'}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: Failed to say message - ${error.message || 'Unknown error'}`,
+              type: 'error'
+            }]);
           }
         }
         return;
@@ -714,14 +955,23 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           try {
             const result = await authenticatedActor.whisper(targetName, message);
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             }
           } catch (error) {
             console.error("Error whispering message:", error);
-            setMessages(prev => [...prev, `Error: Failed to whisper message - ${error.message || 'Unknown error'}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: Failed to whisper message - ${error.message || 'Unknown error'}`,
+              type: 'error'
+            }]);
           }
         } else {
-          setMessages(prev => [...prev, "Error: Whisper command format is '/w <player> <message>'"]);
+          setMessages(prev => [...prev, {
+            content: "Error: Whisper command format is '/w <player> <message>'",
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -729,7 +979,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       // Handle look command (/look)
       if (command.toLowerCase().startsWith('/look ') || command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
         if (!currentRoom) {
-          setMessages(prev => [...prev, "You can't see anything."]);
+          setMessages(prev => [...prev, {
+            content: "You can't see anything.",
+            type: 'system'
+          }]);
           return;
         }
 
@@ -743,19 +996,28 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             try {
               const result = await authenticatedActor.lookAtPlayer(targetPlayer[1]);
               if ('ok' in result) {
-                setMessages(prev => [...prev, 
-                  `${targetPlayer[1]}`,
-                  formatStatsForOthers(result.ok)
-                ]);
+                setMessages(prev => [...prev, {
+                  content: `${targetPlayer[1]}`,
+                  type: 'system'
+                }, {
+                  content: formatStatsForOthers(result.ok),
+                  type: 'system'
+                }]);
               } else {
-                setMessages(prev => [...prev, 
-                  `${targetPlayer[1]} is here.`,
-                  result.err
-                ]);
+                setMessages(prev => [...prev, {
+                  content: `${targetPlayer[1]} is here.`,
+                  type: 'system'
+                }, {
+                  content: result.err,
+                  type: 'error'
+                }]);
               }
             } catch (error) {
               console.error("Error examining player:", error);
-              setMessages(prev => [...prev, `${targetPlayer[1]} is here.`]);
+              setMessages(prev => [...prev, {
+                content: `${targetPlayer[1]} is here.`,
+                type: 'system'
+              }]);
             }
             return;
           }
@@ -788,16 +1050,22 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             if (matchingExit) {
               const [_, exit] = matchingExit;
               const directionStr = typeof exit.direction === 'string' ? ` (${exit.direction})` : '';
-              setMessages(prev => [...prev, 
-                `${exit.name}${directionStr}`,
-                exit.description
-              ]);
+              setMessages(prev => [...prev, {
+                content: `${exit.name}${directionStr}`,
+                type: 'room'
+              }, {
+                content: exit.description,
+                type: 'room'
+              }]);
               return;
             }
 
             // If we were looking for a direction but didn't find a matching exit
             if (directionMap[searchName] || Object.values(directionMap).includes(searchName)) {
-              setMessages(prev => [...prev, `You see no exit in that direction.`]);
+              setMessages(prev => [...prev, {
+                content: `You see no exit in that direction.`,
+                type: 'system'
+              }]);
               return;
             }
           }
@@ -811,63 +1079,126 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             if ('ok' in itemResult) {
               const itemInfo = itemResult.ok;
               const messages = [
-                `${itemInfo.item_type.name}`,
-                itemInfo.item_type.description,
+                {
+                  content: `${itemInfo.item_type.name}`,
+                  type: 'item'
+                },
+                {
+                  content: itemInfo.item_type.description,
+                  type: 'system'
+                },
               ];
 
               // Add container-specific information
               if (itemInfo.item_type.is_container) {
-                messages.push("");
+                messages.push({
+                  content: "",
+                  type: 'system'
+                });
                 if (itemInfo.is_open) {
                   const contentsResult = await authenticatedActor.getContainerContents(item.id);
                   if ('ok' in contentsResult) {
                     const contents = contentsResult.ok;
                     if (contents.length > 0) {
-                      messages.push("Contents:");
+                      messages.push({
+                        content: "Contents:",
+                        type: 'system'
+                      });
                       for (const itemId of contents) {
                         const contentItemResult = await authenticatedActor.getItem(itemId);
                         if ('ok' in contentItemResult) {
                           const contentItem = contentItemResult.ok;
                           const countStr = contentItem.count > 1 ? ` (x${contentItem.count})` : '';
-                          messages.push(`  ${contentItem.item_type.name}${countStr}`);
+                          messages.push({
+                            content: `  ${contentItem.item_type.name}${countStr}`,
+                            type: 'item'
+                          });
                         }
                       }
                     } else {
-                      messages.push("The container is empty.");
+                      messages.push({
+                        content: "The container is empty.",
+                        type: 'system'
+                      });
                     }
                   }
                 } else {
-                  messages.push("The container is closed.");
+                  messages.push({
+                    content: "The container is closed.",
+                    type: 'system'
+                  });
                 }
               }
 
               setMessages(prev => [...prev, ...messages]);
               return;
             } else {
-              setMessages(prev => [...prev, `Error: ${itemResult.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${itemResult.err}`,
+                type: 'error'
+              }]);
               return;
             }
           } catch (error) {
             console.error("Error examining item:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
             return;
           }
         }
 
         const roomMessages = [
-          `${currentRoom.name}`,
-          currentRoom.description,
-          ""
+          {
+            content: `${currentRoom.name}`,
+            type: 'room'
+          },
+          {
+            content: currentRoom.description,
+            type: 'system'
+          },
+          {
+            content: "",
+            type: 'system'
+          }
         ];
 
         if (playersInRoom.length > 0) {
-          const otherPlayers = playersInRoom.filter(([_, name]) => name !== playerName);
+          const otherPlayers = playersInRoom.filter(([principal, name]) => name !== playerName);
           if (otherPlayers.length > 0) {
-            roomMessages.push("You see:");
-            otherPlayers.forEach(([_, name]) => {
-              roomMessages.push(`  ${name} is here.`);
+            roomMessages.push({
+              type: 'system',
+              parts: [
+                { type: 'text', content: 'You see:' }
+              ]
             });
-            roomMessages.push("");
+            
+            otherPlayers.forEach(([playerPrincipal, name]) => {
+              roomMessages.push({
+                type: 'system',
+                parts: [
+                  { type: 'text', content: '  ' },
+                  { 
+                    type: 'player',
+                    content: name,
+                    entityId: playerPrincipal,
+                    interactable: {
+                      tooltip: 'Click to examine player',
+                      actions: {
+                        click: `/look ${name}`
+                      }
+                    }
+                  },
+                  { type: 'text', content: ' is here.' }
+                ]
+              });
+            });
+            
+            roomMessages.push({
+              type: 'system',
+              parts: [{ type: 'text', content: '' }]
+            });
           }
         }
 
@@ -875,23 +1206,41 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         if ('ok' in itemsResult) {
           const items = itemsResult.ok;
           if (items.length > 0) {
-            roomMessages.push("You also see:");
+            roomMessages.push({
+              content: "You also see:",
+              type: 'system'
+            });
             items.forEach(item => {
               const countStr = item.count > 1 ? ` (x${item.count})` : '';
-              roomMessages.push(`  ${item.item_type.name}${countStr}`);
+              roomMessages.push({
+                content: `  ${item.item_type.name}${countStr}`,
+                type: 'item'
+              });
             });
-            roomMessages.push("");
+            roomMessages.push({
+              content: "",
+              type: 'system'
+            });
           }
         }
 
         if (currentRoom.exits && currentRoom.exits.length > 0) {
-          roomMessages.push("Obvious exits:");
+          roomMessages.push({
+            content: "Obvious exits:",
+            type: 'system'
+          });
           currentRoom.exits.forEach(([_, exit]) => {
             const directionStr = exit.direction ? ` (${exit.direction})` : '';
-            roomMessages.push(`  ${exit.name}${directionStr}`);
+            roomMessages.push({
+              content: `  ${exit.name}${directionStr}`,
+              type: 'system'
+            });
           });
         } else {
-          roomMessages.push("There are no obvious exits.");
+          roomMessages.push({
+            content: "There are no obvious exits.",
+            type: 'system'
+          });
         }
 
         setMessages(prev => [...prev, ...roomMessages]);
@@ -905,7 +1254,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if ('ok' in result) {
             const items = result.ok;
             if (items.length === 0) {
-              setMessages(prev => [...prev, "Your inventory is empty."]);
+              setMessages(prev => [...prev, {
+                content: "Your inventory is empty.",
+                type: 'system'
+              }]);
               return;
             }
 
@@ -927,21 +1279,27 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             // Format the inventory message
             setMessages(prev => [
               ...prev,
-              "Your inventory contains:",
-              ...Object.values(groupedItems).map(group => {
-                const countStr = group.count > 1 ? ` (x${group.count})` : '';
-                const containerStatus = group.type.is_container ? 
-                  ` [${group.isOpen ? 'open' : 'closed'}]` : 
-                  '';
-                return `  ${group.type.name}${countStr}${containerStatus}`;
-              })
+              {
+                content: "Your inventory contains:",
+                type: 'system'
+              },
+              ...Object.values(groupedItems).map(group => ({
+                content: `  ${group.type.name}${group.count > 1 ? ` (x${group.count})` : ''}`,
+                type: 'system'
+              }))
             ]);
           } else if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error getting inventory:", error);
-          setMessages(prev => [...prev, `Error: Failed to get inventory - ${error.message || 'Unknown error'}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: Failed to get inventory - ${error.message || 'Unknown error'}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -954,7 +1312,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: item [count]
           const matches = argsString.match(/^(.+?)(?:\s+(\d+))?$/);
           if (!matches) {
-            setMessages(prev => [...prev, "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'"]);
+            setMessages(prev => [...prev, {
+              content: "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'",
+              type: 'error'
+            }]);
             return;
           }
           
@@ -979,15 +1340,24 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             );
             
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             }
             // Success message comes from backend via message polling
           } catch (error) {
             console.error("Error dropping item:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'"]);
+          setMessages(prev => [...prev, {
+            content: "Error: Drop command format is '/drop <item>' or '/drop <item> <count>'",
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1000,7 +1370,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: item [count]
           const matches = argsString.match(/^(.+?)(?:\s+(\d+))?$/);
           if (!matches) {
-            setMessages(prev => [...prev, "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'"]);
+            setMessages(prev => [...prev, {
+              content: "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'",
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1025,15 +1398,24 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             );
             
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             }
             // Success message comes from backend via message polling
           } catch (error) {
             console.error("Error picking up item:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'"]);
+          setMessages(prev => [...prev, {
+            content: "Error: Pick command format is '/pick <item>' or '/pick <item> <count>'",
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1046,7 +1428,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: item to player [count]
           const matches = argsString.match(/^(.+?)\s+to\s+(.+?)(?:\s+(\d+))?$/);
           if (!matches) {
-            setMessages(prev => [...prev, "Error: Give command format is '/give <item> to <player>' or '/give <item> to <player> <count>'"]);
+            setMessages(prev => [...prev, {
+              content: "Error: Give command format is '/give <item> to <player>' or '/give <item> to <player> <count>'",
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1058,7 +1443,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             const targetPlayer = playersInRoom.find(([_, name]) => name === targetPlayerName);
             
             if (!targetPlayer) {
-              setMessages(prev => [...prev, `Error: ${targetPlayerName} is not in the room`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${targetPlayerName} is not in the room`,
+                type: 'error'
+              }]);
               return;
             }
 
@@ -1079,15 +1467,24 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             );
             
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             }
             // Success message comes from backend via message polling
           } catch (error) {
             console.error("Error giving item:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, "Error: Give command format is '/give <item> to <player>' or '/give <item> to <player> <count>'"]);
+          setMessages(prev => [...prev, {
+            content: "Error: Give command format is '/give <item> to <player>' or '/give <item> to <player> <count>'",
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1102,20 +1499,32 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if ('ok' in result) {
             const isOpen = result.ok;
             if (isOpen) {
-              setMessages(prev => [...prev, `${item.name} is now open`]);
+              setMessages(prev => [...prev, {
+                content: `${item.name} is now open`,
+                type: 'system'
+              }]);
             } else {
               // If it returned false, it was open, so toggle it back
               const secondResult = await authenticatedActor.toggleContainer(item.id);
               if ('ok' in secondResult) {
-                setMessages(prev => [...prev, `${item.name} is already open`]);
+                setMessages(prev => [...prev, {
+                  content: `${item.name} is already open`,
+                  type: 'system'
+                }]);
               }
             }
           } else if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error opening container:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1130,20 +1539,32 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if ('ok' in result) {
             const isOpen = result.ok;
             if (!isOpen) {
-              setMessages(prev => [...prev, `${item.name} is now closed`]);
+              setMessages(prev => [...prev, {
+                content: `${item.name} is now closed`,
+                type: 'system'
+              }]);
             } else {
               // If it returned true, it was closed, so toggle it back
               const secondResult = await authenticatedActor.toggleContainer(item.id);
               if ('ok' in secondResult) {
-                setMessages(prev => [...prev, `${item.name} is already closed`]);
+                setMessages(prev => [...prev, {
+                  content: `${item.name} is already closed`,
+                  type: 'system'
+                }]);
               }
             }
           } else if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error closing container:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1158,7 +1579,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           const matches = argsString.match(/^(.+?)\s+(?:in|into)\s+(.+?)(?:\s+(\d+))?$/);
           console.log("Regex matches:", matches);
           if (!matches) {
-            setMessages(prev => [...prev, "Error: Put command format is '/put <item> in <container>' or '/put <item> in <container> <count>'"]);
+            setMessages(prev => [...prev, {
+              content: "Error: Put command format is '/put <item> in <container>' or '/put <item> in <container> <count>'",
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1191,14 +1615,23 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             console.log("Transfer result:", result);
             
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             }
           } catch (error) {
             console.error("Error putting item in container:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, "Error: Put command format is '/put <item> in <container>' or '/put <item> in <container> <count>'"]);
+          setMessages(prev => [...prev, {
+            content: "Error: Put command format is '/put <item> in <container>' or '/put <item> in <container> <count>'",
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1207,7 +1640,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (command === '/stats') {
         const stats = await authenticatedActor.getStats();
         if ('ok' in stats) {
-          setMessages(prev => [...prev, formatStats(stats.ok)]);
+          setMessages(prev => [...prev, {
+            content: formatStats(stats.ok),
+            type: 'system'
+          }]);
         } else {
           throw new Error(stats.err);
         }
@@ -1219,12 +1655,18 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const result = await authenticatedActor.createCharacter();
           if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
           // Success message comes from backend via message polling
         } catch (error) {
           console.error("Error creating character:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1237,7 +1679,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: "Room Name", "Room Description"
           const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"$/);
           if (!matches) {
-            setMessages(prev => [...prev, 'Error: Create room command format is \'/create_room "Room Name", "Room Description"\'']);
+            setMessages(prev => [...prev, {
+              content: 'Error: Create room command format is \'/create_room "Room Name", "Room Description"\'',
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1245,17 +1690,29 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           try {
             const result = await authenticatedActor.createRoom(name, description);
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             } else {
               const roomId = result.ok;
-              setMessages(prev => [...prev, `Successfully created room "${name}" (ID: ${roomId})`]);
+              setMessages(prev => [...prev, {
+                content: `Successfully created room "${name}" (ID: ${roomId})`,
+                type: 'system'
+              }]);
             }
           } catch (error) {
             console.error("Error creating room:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, 'Error: Create room command format is \'/create_room "Room Name", "Room Description"\'']);
+          setMessages(prev => [...prev, {
+            content: 'Error: Create room command format is \'/create_room "Room Name", "Room Description"\'',
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1268,14 +1725,20 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]
           const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(\d+)(?:\s*,\s*"([^"]+)")?$/);
           if (!matches) {
-            setMessages(prev => [...prev, 'Error: Create exit command format is \'/create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]\'']);
+            setMessages(prev => [...prev, {
+              content: 'Error: Create exit command format is \'/create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]\'',
+              type: 'error'
+            }]);
             return;
           }
           
           const [_, exitId, name, description, targetRoomId, direction] = matches;
           try {
             if (!currentRoom) {
-              setMessages(prev => [...prev, 'Error: You must be in a room to create an exit']);
+              setMessages(prev => [...prev, {
+                content: 'Error: You must be in a room to create an exit',
+                type: 'error'
+              }]);
               return;
             }
 
@@ -1289,16 +1752,28 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             );
             
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             } else {
-              setMessages(prev => [...prev, `Successfully created exit "${name}" (ID: ${exitId}) leading to room ${targetRoomId}${direction ? ` in direction ${direction}` : ''}`]);
+              setMessages(prev => [...prev, {
+                content: `Successfully created exit "${name}" (ID: ${exitId}) leading to room ${targetRoomId}${direction ? ` in direction ${direction}` : ''}`,
+                type: 'system'
+              }]);
             }
           } catch (error) {
             console.error("Error creating exit:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, 'Error: Create exit command format is \'/create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]\'']);
+          setMessages(prev => [...prev, {
+            content: 'Error: Create exit command format is \'/create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"]\'',
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1311,7 +1786,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: "Name", "Description", is_container, container_capacity, "icon_url", stack_max
           const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(true|false)\s*,\s*(\d+|null)\s*,\s*"([^"]+)"\s*,\s*(\d+)$/);
           if (!matches) {
-            setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number."]);
+            setMessages(prev => [...prev, {
+              content: "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number.",
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1324,7 +1802,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
                 type.name.toLowerCase() === name.toLowerCase()
               );
               if (existingType) {
-                setMessages(prev => [...prev, `Error: An item type with the name "${name}" already exists (ID: ${existingType.id})`]);
+                setMessages(prev => [...prev, {
+                  content: `Error: An item type with the name "${name}" already exists (ID: ${existingType.id})`,
+                  type: 'error'
+                }]);
                 return;
               }
             }
@@ -1338,16 +1819,28 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
               parseInt(stackMax)
             );
             if ('ok' in result) {
-              setMessages(prev => [...prev, `Successfully created item type ${name} with ID ${result.ok}`]);
+              setMessages(prev => [...prev, {
+                content: `Successfully created item type ${name} with ID ${result.ok}`,
+                type: 'system'
+              }]);
             } else if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             }
           } catch (error) {
             console.error("Error creating item type:", error);
-            setMessages(prev => [...prev, `Error: Failed to create item type - ${error.message || 'Unknown error'}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: Failed to create item type - ${error.message || 'Unknown error'}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number."]);
+          setMessages(prev => [...prev, {
+            content: "Error: Create item type command format is '/create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max'\nFor non-containers, use 'null' as the container_capacity. For containers, use a number.",
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1362,7 +1855,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           const matches = argsString.match(/^(?:"([^"]+)"|(\d+))(?:\s+(\d+))?$/);
           if (!matches) {
             console.log("No regex match for create_item args");
-            setMessages(prev => [...prev, "Error: Create item command format is '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'"]);
+            setMessages(prev => [...prev, {
+              content: "Error: Create item command format is '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'",
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1380,13 +1876,19 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
                 type.name.toLowerCase() === quotedName.toLowerCase()
               );
               if (!matchingType) {
-                setMessages(prev => [...prev, `Error: No item type found with name "${quotedName}"`]);
+                setMessages(prev => [...prev, {
+                  content: `Error: No item type found with name "${quotedName}"`,
+                  type: 'error'
+                }]);
                 return;
               }
               typeId = matchingType.id;
               console.log("Found type ID from name:", typeId);
             } else {
-              setMessages(prev => [...prev, `Error: Failed to get item types`]);
+              setMessages(prev => [...prev, {
+                content: `Error: Failed to get item types`,
+                type: 'error'
+              }]);
               return;
             }
           } else {
@@ -1398,7 +1900,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Verify the type exists and get its name
           const typeResult = await authenticatedActor.getItemType(typeId);
           if ('err' in typeResult) {
-            setMessages(prev => [...prev, `Error: ${typeResult.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${typeResult.err}`,
+              type: 'error'
+            }]);
             return;
           }
           const typeName = typeResult.ok.name;
@@ -1412,13 +1917,22 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           console.log("Create item result:", result);
           if ('ok' in result) {
             const countStr = count ? ` (x${count})` : '';
-            setMessages(prev => [...prev, `Successfully created ${typeName}${countStr} with ID ${result.ok}`]);
+            setMessages(prev => [...prev, {
+              content: `Successfully created ${typeName}${countStr} with ID ${result.ok}`,
+              type: 'system'
+            }]);
           } else if ('err' in result) {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error creating item:", error);
-          setMessages(prev => [...prev, "Error: Invalid command format. Use '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'"]);
+          setMessages(prev => [...prev, {
+            content: "Error: Invalid command format. Use '/create_item \"Item Name\" [count]' or '/create_item type_id [count]'",
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1427,7 +1941,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (command.startsWith('/wallet register')) {
         const matches = command.match(/^\/wallet register ([a-z0-9-]+)$/);
         if (!matches) {
-          setMessages(prev => [...prev, 'Usage: /wallet register <canister_id>']);
+          setMessages(prev => [...prev, {
+            content: 'Usage: /wallet register <canister_id>',
+            type: 'error'
+          }]);
           return;
         }
 
@@ -1435,12 +1952,21 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const result = await authenticatedActor.registerToken(Principal.fromText(canisterId));
           if ('err' in result) {
-            setMessages(prev => [...prev, `Error registering token: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error registering token: ${result.err}`,
+              type: 'error'
+            }]);
           } else {
-            setMessages(prev => [...prev, `Successfully registered token ledger ${canisterId}`]);
+            setMessages(prev => [...prev, {
+              content: `Successfully registered token ledger ${canisterId}`,
+              type: 'system'
+            }]);
           }
         } catch (e) {
-          setMessages(prev => [...prev, `Error registering token: ${e.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error registering token: ${e.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1448,7 +1974,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (command.startsWith('/wallet unregister')) {
         const matches = command.match(/^\/wallet unregister ([a-z0-9-]+)$/);
         if (!matches) {
-          setMessages(prev => [...prev, 'Usage: /wallet unregister <canister_id>']);
+          setMessages(prev => [...prev, {
+            content: 'Usage: /wallet unregister <canister_id>',
+            type: 'error'
+          }]);
           return;
         }
 
@@ -1456,12 +1985,21 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const result = await authenticatedActor.unregisterToken(Principal.fromText(canisterId));
           if ('err' in result) {
-            setMessages(prev => [...prev, `Error unregistering token: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error unregistering token: ${result.err}`,
+              type: 'error'
+            }]);
           } else {
-            setMessages(prev => [...prev, `Successfully unregistered token ledger ${canisterId}`]);
+            setMessages(prev => [...prev, {
+              content: `Successfully unregistered token ledger ${canisterId}`,
+              type: 'system'
+            }]);
           }
         } catch (e) {
-          setMessages(prev => [...prev, `Error unregistering token: ${e.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error unregistering token: ${e.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1470,17 +2008,29 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const tokens = await authenticatedActor.getRegisteredTokens();
           if (tokens.length === 0) {
-            setMessages(prev => [...prev, 'No registered tokens found']);
+            setMessages(prev => [...prev, {
+              content: 'No registered tokens found',
+              type: 'system'
+            }]);
           } else {
-            setMessages(prev => [...prev, 'Registered tokens:']);
+            setMessages(prev => [...prev, {
+              content: 'Registered tokens:',
+              type: 'system'
+            }]);
             for (const token of tokens) {
               const { metadata, ledgerCanisterId } = token;
               const staleWarning = await authenticatedActor.hasStaleMetadata() ? ' (metadata needs refresh)' : '';
-              setMessages(prev => [...prev, `${metadata.name} (${metadata.symbol}) - ${ledgerCanisterId.toText()}${staleWarning}`]);
+              setMessages(prev => [...prev, {
+                content: `${metadata.name} (${metadata.symbol}) - ${ledgerCanisterId.toText()}${staleWarning}`,
+                type: 'system'
+              }]);
             }
           }
         } catch (e) {
-          setMessages(prev => [...prev, `Error listing tokens: ${e.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error listing tokens: ${e.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1488,7 +2038,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (command.startsWith('/wallet refresh')) {
         const matches = command.match(/^\/wallet refresh ([a-z0-9-]+)$/);
         if (!matches) {
-          setMessages(prev => [...prev, 'Usage: /wallet refresh <canister_id>']);
+          setMessages(prev => [...prev, {
+            content: 'Usage: /wallet refresh <canister_id>',
+            type: 'error'
+          }]);
           return;
         }
 
@@ -1496,12 +2049,21 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const result = await authenticatedActor.refreshTokenMetadata(Principal.fromText(canisterId));
           if ('err' in result) {
-            setMessages(prev => [...prev, `Error refreshing token metadata: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error refreshing token metadata: ${result.err}`,
+              type: 'error'
+            }]);
           } else {
-            setMessages(prev => [...prev, `Successfully refreshed metadata for token ledger ${canisterId}`]);
+            setMessages(prev => [...prev, {
+              content: `Successfully refreshed metadata for token ledger ${canisterId}`,
+              type: 'system'
+            }]);
           }
         } catch (e) {
-          setMessages(prev => [...prev, `Error refreshing token metadata: ${e.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error refreshing token metadata: ${e.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1514,7 +2076,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: "Name", "Description"
           const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"$/);
           if (!matches) {
-            setMessages(prev => [...prev, 'Error: Create class command format is \'/create_class "Class Name", "Class Description"\'']);
+            setMessages(prev => [...prev, {
+              content: 'Error: Create class command format is \'/create_class "Class Name", "Class Description"\'',
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1522,16 +2087,28 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           try {
             const result = await authenticatedActor.createCharacterClass(name, description);
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             } else {
-              setMessages(prev => [...prev, `Successfully created character class "${name}"`]);
+              setMessages(prev => [...prev, {
+                content: `Successfully created character class "${name}"`,
+                type: 'system'
+              }]);
             }
           } catch (error) {
             console.error("Error creating character class:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, 'Error: Create class command format is \'/create_class "Class Name", "Class Description"\'']);
+          setMessages(prev => [...prev, {
+            content: 'Error: Create class command format is \'/create_class "Class Name", "Class Description"\'',
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1546,43 +2123,106 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             const baseStats = characterClass.baseStats;
             const growthRates = characterClass.growthRates;
             
-            setMessages(prev => [...prev, 
-              `Character Class: ${characterClass.name}`,
-              characterClass.description,
-              "",
-              "Base Stats:",
-              `HP: ${baseStats.baseHp}`,
-              `MP: ${baseStats.baseMp}`,
-              `Physical Attack: ${baseStats.basePhysicalAttack}`,
-              `Physical Defense: ${baseStats.basePhysicalDefense}`,
-              `Magic Attack: ${baseStats.baseMagicAttack}`,
-              `Magic Defense: ${baseStats.baseMagicDefense}`,
-              `Attack Speed: ${baseStats.baseAttackSpeed}`,
-              "",
-              "Primary Attributes:",
-              `Strength: ${baseStats.strength}`,
-              `Dexterity: ${baseStats.dexterity}`,
-              `Constitution: ${baseStats.constitution}`,
-              `Intelligence: ${baseStats.intelligence}`,
-              `Wisdom: ${baseStats.wisdom}`,
-              "",
-              "Growth Rates:",
-              `HP per Level: ${growthRates.hpPerLevel}`,
-              `MP per Level: ${growthRates.mpPerLevel}`,
-              `HP per Constitution: ${growthRates.hpPerCon}`,
-              `MP per Wisdom: ${growthRates.mpPerWis}`,
-              `Physical Attack per Strength: ${growthRates.physicalAttackPerStr}`,
-              `Physical Defense per Constitution: ${growthRates.physicalDefensePerCon}`,
-              `Magic Attack per Intelligence: ${growthRates.magicAttackPerInt}`,
-              `Magic Defense per Wisdom: ${growthRates.magicDefensePerWis}`,
-              `Attack Speed per Dexterity: ${growthRates.attackSpeedPerDex}`
-            ]);
+            setMessages(prev => [...prev, {
+              content: `Character Class: ${characterClass.name}`,
+              type: 'system'
+            }, {
+              content: characterClass.description,
+              type: 'system'
+            }, {
+              content: "",
+              type: 'system'
+            }, {
+              content: "Base Stats:",
+              type: 'system'
+            }, {
+              content: `HP: ${baseStats.baseHp}`,
+              type: 'system'
+            }, {
+              content: `MP: ${baseStats.baseMp}`,
+              type: 'system'
+            }, {
+              content: `Physical Attack: ${baseStats.basePhysicalAttack}`,
+              type: 'system'
+            }, {
+              content: `Physical Defense: ${baseStats.basePhysicalDefense}`,
+              type: 'system'
+            }, {
+              content: `Magic Attack: ${baseStats.baseMagicAttack}`,
+              type: 'system'
+            }, {
+              content: `Magic Defense: ${baseStats.baseMagicDefense}`,
+              type: 'system'
+            }, {
+              content: `Attack Speed: ${baseStats.baseAttackSpeed}`,
+              type: 'system'
+            }, {
+              content: "",
+              type: 'system'
+            }, {
+              content: "Primary Attributes:",
+              type: 'system'
+            }, {
+              content: `Strength: ${baseStats.strength}`,
+              type: 'system'
+            }, {
+              content: `Dexterity: ${baseStats.dexterity}`,
+              type: 'system'
+            }, {
+              content: `Constitution: ${baseStats.constitution}`,
+              type: 'system'
+            }, {
+              content: `Intelligence: ${baseStats.intelligence}`,
+              type: 'system'
+            }, {
+              content: `Wisdom: ${baseStats.wisdom}`,
+              type: 'system'
+            }, {
+              content: "",
+              type: 'system'
+            }, {
+              content: "Growth Rates:",
+              type: 'system'
+            }, {
+              content: `HP per Level: ${growthRates.hpPerLevel}`,
+              type: 'system'
+            }, {
+              content: `MP per Level: ${growthRates.mpPerLevel}`,
+              type: 'system'
+            }, {
+              content: `HP per Constitution: ${growthRates.hpPerCon}`,
+              type: 'system'
+            }, {
+              content: `MP per Wisdom: ${growthRates.mpPerWis}`,
+              type: 'system'
+            }, {
+              content: `Physical Attack per Strength: ${growthRates.physicalAttackPerStr}`,
+              type: 'system'
+            }, {
+              content: `Physical Defense per Constitution: ${growthRates.physicalDefensePerCon}`,
+              type: 'system'
+            }, {
+              content: `Magic Attack per Intelligence: ${growthRates.magicAttackPerInt}`,
+              type: 'system'
+            }, {
+              content: `Magic Defense per Wisdom: ${growthRates.magicDefensePerWis}`,
+              type: 'system'
+            }, {
+              content: `Attack Speed per Dexterity: ${growthRates.attackSpeedPerDex}`,
+              type: 'system'
+            }]);
           } else {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error showing character class:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1594,20 +2234,35 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if ('ok' in result) {
             const classes = result.ok;
             if (classes.length === 0) {
-              setMessages(prev => [...prev, "No character classes available."]);
+              setMessages(prev => [...prev, {
+                content: "No character classes available.",
+                type: 'system'
+              }]);
             } else {
               setMessages(prev => [
                 ...prev,
-                "Available Character Classes:",
-                ...classes.map(c => `${c.name} - ${c.description}`)
+                {
+                  content: "Available Character Classes:",
+                  type: 'system'
+                },
+                ...classes.map(c => ({
+                  content: `${c.name} - ${c.description}`,
+                  type: 'system'
+                }))
               ]);
             }
           } else {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error listing character classes:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1620,7 +2275,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           // Match format: "Class Name", "attribute", "value"
           const matches = argsString.match(/^"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"$/);
           if (!matches) {
-            setMessages(prev => [...prev, 'Error: Update class command format is \'/update_class "Class Name", "attribute", "value"\'']);
+            setMessages(prev => [...prev, {
+              content: 'Error: Update class command format is \'/update_class "Class Name", "attribute", "value"\'',
+              type: 'error'
+            }]);
             return;
           }
           
@@ -1628,16 +2286,28 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           try {
             const result = await authenticatedActor.updateCharacterClass(className, attribute, value);
             if ('err' in result) {
-              setMessages(prev => [...prev, `Error: ${result.err}`]);
+              setMessages(prev => [...prev, {
+                content: `Error: ${result.err}`,
+                type: 'error'
+              }]);
             } else {
-              setMessages(prev => [...prev, `Successfully updated ${attribute} for character class "${className}"`]);
+              setMessages(prev => [...prev, {
+                content: `Successfully updated ${attribute} for character class "${className}"`,
+                type: 'system'
+              }]);
             }
           } catch (error) {
             console.error("Error updating character class:", error);
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${error.message}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, 'Error: Update class command format is \'/update_class "Class Name", "attribute", "value"\'']);
+          setMessages(prev => [...prev, {
+            content: 'Error: Update class command format is \'/update_class "Class Name", "attribute", "value"\'',
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1648,10 +2318,16 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           const message = command.substring(4).trim(); // Get everything after '/afk'
           const result = await authenticatedActor.setAfk(message);
           if ('err' in result) {
-            setMessages(prev => [...prev, result.err]);
+            setMessages(prev => [...prev, {
+              content: result.err,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, "Error setting AFK status: " + error.message]);
+          setMessages(prev => [...prev, {
+            content: "Error setting AFK status: " + error.message,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1661,10 +2337,16 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
         try {
           const result = await authenticatedActor.returnFromAfk();
           if ('err' in result) {
-            setMessages(prev => [...prev, result.err]);
+            setMessages(prev => [...prev, {
+              content: result.err,
+              type: 'error'
+            }]);
           }
         } catch (error) {
-          setMessages(prev => [...prev, "Error returning from AFK: " + error.message]);
+          setMessages(prev => [...prev, {
+            content: "Error returning from AFK: " + error.message,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1677,23 +2359,35 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if ('ok' in result) {
             const players = result.ok;
             if (players.length === 0) {
-              setMessages(prev => [...prev, "No players currently online."]);
+              setMessages(prev => [...prev, {
+                content: "No players currently online.",
+                type: 'system'
+              }]);
             } else {
               setMessages(prev => [
                 ...prev,
-                "Online Players:",
-                ...players.map(p => 
-                  `${p.name} (${p.characterClass})${p.status === 'Afk' ? 
-                    ` - AFK${p.afkMessage ? ': ' + p.afkMessage : ''}` : ''}`
-                )
+                {
+                  content: "Online Players:",
+                  type: 'system'
+                },
+                ...players.map(p => ({
+                  content: `${p.name} (${p.characterClass})${p.status === 'Afk' ? p.afkMessage ? ': ' + p.afkMessage : '' : ''}`,
+                  type: 'system'
+                }))
               ]);
             }
           } else {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error getting online players:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
@@ -1704,33 +2398,49 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           if ('ok' in result) {
             const players = result.ok;
             if (players.length === 0) {
-              setMessages(prev => [...prev, "No registered players found."]);
+              setMessages(prev => [...prev, {
+                content: "No registered players found.",
+                type: 'system'
+              }]);
             } else {
               setMessages(prev => [
                 ...prev,
-                "All Players:",
-                ...players.map(p => {
-                  let statusText = p.status === 'Online' ? 'Online' : 
-                                  p.status === 'Afk' ? 'AFK' : 'Offline';
-                  let afkMsg = p.status === 'Afk' && p.afkMessage ? `: ${p.afkMessage}` : '';
-                  return `${p.name} (${p.characterClass}) - ${statusText}${afkMsg}`;
-                })
+                {
+                  content: "All Players:",
+                  type: 'system'
+                },
+                ...players.map(p => ({
+                  content: `${p.name} (${p.characterClass}) - ${p.status === 'Online' ? 'Online' : p.status === 'Afk' ? 'AFK' : 'Offline'}${p.status === 'Afk' && p.afkMessage ? ': ' + p.afkMessage : ''}`,
+                  type: 'system'
+                }))
               ]);
             }
           } else {
-            setMessages(prev => [...prev, `Error: ${result.err}`]);
+            setMessages(prev => [...prev, {
+              content: `Error: ${result.err}`,
+              type: 'error'
+            }]);
           }
         } catch (error) {
           console.error("Error getting all players:", error);
-          setMessages(prev => [...prev, `Error: ${error.message}`]);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
         return;
       }
 
       // If no command matched, show error
-      setMessages(prev => [...prev, "Unknown command. Type /help for available commands."]);
+      setMessages(prev => [...prev, {
+        content: "Unknown command. Type /help for available commands.",
+        type: 'error'
+      }]);
     } catch (error) {
-      setMessages(prev => [...prev, "Error: " + error.message]);
+      setMessages(prev => [...prev, {
+        content: "Error: " + error.message,
+        type: 'error'
+      }]);
     }
   }
 
@@ -1751,7 +2461,10 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
           <p>{currentRoom.description}</p>
         </div>
       )}
-      <TextLog messages={messages} />
+      <TextLog 
+        messages={messages} 
+        onCommand={handleCommand}
+      />
       <RoomInterface 
         onCommand={handleCommand}
         currentRoom={currentRoom}
