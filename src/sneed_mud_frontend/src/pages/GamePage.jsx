@@ -589,53 +589,62 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
       // Handle help command (/help or /?)
       if (command === '/help' || command === '/?') {
-        setMessages(prev => [...prev, `Available commands:
-
-Movement:
-  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)
-
-Communication:
-  /say <message>, /s <message> - Say something to everyone in the room
-  /whisper <player> <message>, /w <player> <message> - Send a private message to a player
-
-Combat:
-  /attack <player> - Attack another player in the same room
-  /respawn - Return to the starting point after death (60 second cooldown)
-
-Items:
-  /inventory, /i - Show your inventory
-  /look [target], /l [target] - Look around the room or examine a specific target (item, player, or exit)
-  /pick <item> [count], /take <item> [count] - Pick up an item from the room
-  /drop <item> [count] - Drop an item in the current room
-  /give <item> to <player> [count] - Give an item to another player
-
-Containers:
-  /open <container> - Open a container
-  /close <container> - Close a container
-  /put <item> in|into <container> [count] - Put an item into a container
-
-Character:
-  /stats - Show your character's stats (Level, HP, MP, XP)
-  /create - Create character stats if you don't have them
-
-Wallet:
-  /wallet - Show your wallet balances and principal
-  /wallet hide_zero - Hide zero balances in wallet display
-  /wallet show_zero - Show all balances in wallet display
-  /send <amount> <token> to <recipient> - Send tokens to a player or principal
-
-Admin Commands (Realm Owners only):
-  /create_room "Room Name", "Room Description" - Create a new room
-  /create_exit "Exit ID", "Exit Name", "Exit Description", target_room_id[, "direction"] - Create an exit in current room
-  /create_item_type "Name", "Description", is_container, container_capacity, "icon_url", stack_max - Create a new item type
-  /create_item "Item Name"|type_id [count] - Create a new item
-  /create_class "Name", "Description" - Create a new character class
-  /update_class "Class Name", "attribute", "value" - Update a character class attribute
-  /list_classes - Show all character classes and their descriptions
-  /show_class <name> - Show detailed information about a character class
-
-Help:
-  /help, /? - Show this help message`]);
+        setMessages(prev => [
+          ...prev,
+          "Available commands:",
+          "",
+          "Movement:",
+          "  /go <exit>, /g <exit> - Move through an exit (can use exit name, ID, or direction)",
+          "",
+          "Communication:",
+          "  /say <message>, /s <message> - Say something to everyone in the room",
+          "  /whisper <player> <message>, /w <player> <message> - Send a private message to a player",
+          "",
+          "Combat:",
+          "  /attack <player> - Attack another player in the same room",
+          "  /respawn - Return to the starting point after death (60 second cooldown)",
+          "",
+          "Items:",
+          "  /inventory, /i - Show your inventory",
+          "  /look [target], /l [target] - Look around the room or examine a specific target",
+          "  /pick <item> [count], /take <item> [count] - Pick up an item from the room",
+          "  /drop <item> [count] - Drop an item in the current room",
+          "  /give <item> to <player> [count] - Give an item to another player",
+          "",
+          "Containers:",
+          "  /open <container> - Open a container",
+          "  /close <container> - Close a container",
+          "  /put <item> in|into <container> [count] - Put an item into a container",
+          "",
+          "Character:",
+          "  /stats - Show your character's stats (Level, HP, MP, XP)",
+          "  /create - Create character stats if you don't have them",
+          "",
+          "Status:",
+          "  /online - Show all online players",
+          "  /players - Show all registered players",
+          "  /afk [message] - Set yourself as AFK with optional message",
+          "  /back - Return from AFK",
+          "",
+          "Wallet:",
+          "  /wallet - Show your wallet balances and principal",
+          "  /wallet hide_zero - Hide zero balances in wallet display",
+          "  /wallet show_zero - Show all balances in wallet display",
+          "  /send <amount> <token> to <recipient> - Send tokens to a player or principal",
+          "",
+          "Admin Commands (Realm Owners only):",
+          `  /create_room \"Room Name\", \"Room Description\" - Create a new room`,
+          `  /create_exit \"Exit ID\", \"Exit Name\", \"Exit Description\", target_room_id[, \"direction\"] - Create an exit`,
+          `  /create_item_type \"Name\", \"Description\", is_container, container_capacity, \"icon_url\", stack_max - Create item type`,
+          `  /create_item \"Item Name\"|type_id [count] - Create a new item`,
+          `  /create_class \"Name\", \"Description\" - Create a new character class`,
+          `  /update_class \"Class Name\", \"attribute\", \"value\" - Update a character class attribute`,
+          "  /list_classes - Show all character classes and their descriptions",
+          "  /show_class <name> - Show detailed information about a character class",
+          "",
+          "Help:",
+          "  /help, /? - Show this help message"
+        ]);
         return;
       }
 
@@ -1656,6 +1665,64 @@ Help:
           }
         } catch (error) {
           setMessages(prev => [...prev, "Error returning from AFK: " + error.message]);
+        }
+        return;
+      }
+
+      // Inside the handleCommand function, add these new cases:
+
+      if (command === '/online') {
+        try {
+          const result = await authenticatedActor.getOnlinePlayers();
+          if ('ok' in result) {
+            const players = result.ok;
+            if (players.length === 0) {
+              setMessages(prev => [...prev, "No players currently online."]);
+            } else {
+              setMessages(prev => [
+                ...prev,
+                "Online Players:",
+                ...players.map(p => 
+                  `${p.name} (${p.characterClass})${p.status === 'Afk' ? 
+                    ` - AFK${p.afkMessage ? ': ' + p.afkMessage : ''}` : ''}`
+                )
+              ]);
+            }
+          } else {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error getting online players:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
+        }
+        return;
+      }
+
+      if (command === '/players') {
+        try {
+          const result = await authenticatedActor.getAllPlayers();
+          if ('ok' in result) {
+            const players = result.ok;
+            if (players.length === 0) {
+              setMessages(prev => [...prev, "No registered players found."]);
+            } else {
+              setMessages(prev => [
+                ...prev,
+                "All Players:",
+                ...players.map(p => {
+                  let statusText = p.status === 'Online' ? 'Online' : 
+                                  p.status === 'Afk' ? 'AFK' : 'Offline';
+                  let afkMsg = p.status === 'Afk' && p.afkMessage ? `: ${p.afkMessage}` : '';
+                  return `${p.name} (${p.characterClass}) - ${statusText}${afkMsg}`;
+                })
+              ]);
+            }
+          } else {
+            setMessages(prev => [...prev, `Error: ${result.err}`]);
+          }
+        } catch (error) {
+          console.error("Error getting all players:", error);
+          setMessages(prev => [...prev, `Error: ${error.message}`]);
         }
         return;
       }

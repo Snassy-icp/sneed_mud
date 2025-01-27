@@ -619,4 +619,91 @@ actor class MudBackend() = this {
       };
     }
   };
+
+  public query(msg) func getOnlinePlayers() : async Result.Result<[Types.PlayerInfo], Text> {
+    let onlinePlayers = Buffer.Buffer<Types.PlayerInfo>(0);
+    
+    for ((principal, name) in state.players.entries()) {
+      switch (State.getPlayerStatus(state, principal)) {
+        case (#Offline) { /* Skip offline players */ };
+        case (status) {
+          // Get character class
+          var className = "Unknown";
+          switch (state.playerBaseStats.get(principal)) {
+            case (?baseStats) {
+              label classSearch for ((n, c) in state.characterClasses.entries()) {
+                if (c.baseStats == baseStats) {
+                  className := n;
+                  break classSearch;
+                };
+              };
+              // Check admin class if not found in regular classes
+              if (className == "Unknown") {
+                switch (state.adminCharacterClass) {
+                  case (?adminClass) {
+                    if (adminClass.baseStats == baseStats) {
+                      className := adminClass.name;
+                    };
+                  };
+                  case null {};
+                };
+              };
+            };
+            case null {};
+          };
+
+          onlinePlayers.add({
+            name = name;
+            characterClass = className;
+            status = status;
+            afkMessage = null;  // We'll implement AFK messages later if needed
+          });
+        };
+      };
+    };
+    
+    #ok(Buffer.toArray(onlinePlayers))
+  };
+
+  public query(msg) func getAllPlayers() : async Result.Result<[Types.PlayerInfo], Text> {
+    let allPlayers = Buffer.Buffer<Types.PlayerInfo>(0);
+    
+    for ((principal, name) in state.players.entries()) {
+      let status = State.getPlayerStatus(state, principal);
+      
+      // Get character class
+      var className = "Unknown";
+      switch (state.playerBaseStats.get(principal)) {
+        case (?baseStats) {
+          label classSearch for ((n, c) in state.characterClasses.entries()) {
+            if (c.baseStats == baseStats) {
+              className := n;
+              break classSearch;
+            };
+          };
+          // Check admin class if not found in regular classes
+          if (className == "Unknown") {
+            switch (state.adminCharacterClass) {
+              case (?adminClass) {
+                if (adminClass.baseStats == baseStats) {
+                  className := adminClass.name;
+                };
+              };
+              case null {};
+            };
+          };
+        };
+        case null {};
+      };
+
+      allPlayers.add({
+        name = name;
+        characterClass = className;
+        status = status;
+        afkMessage = null;  // We'll implement AFK messages later if needed
+      });
+    };
+    
+    #ok(Buffer.toArray(allPlayers))
+  };
 }

@@ -237,4 +237,12 @@ module {
 
   // Player status types
   public type PlayerStatus = {#Online; #Offline; #Afk};
+
+  // Update PlayerInfo to use PlayerStatus
+  public type PlayerInfo = {
+    name: Text;
+    characterClass: Text;
+    status: PlayerStatus;
+    afkMessage: ?Text;
+  };
 } 
