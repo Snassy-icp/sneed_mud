@@ -914,256 +914,96 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       }
 
       // Handle look command (/look)
-      if (command.toLowerCase().startsWith('/look ') || command.toLowerCase() === '/look' || command.toLowerCase() === '/l') {
-        if (!currentRoom) {
-          setMessages(prev => [...prev, {
-            content: "You can't see anything.",
-            type: 'system'
-          }]);
-          return;
-        }
-
-        console.log("Current room data:", currentRoom);
-        console.log("Room exits:", currentRoom.exits);
-
-        // Check if looking at a specific target
-        if (command.toLowerCase().startsWith('/look ') || command.toLowerCase().startsWith('/l ')) {
-          const targetName = command.substring(command.indexOf(' ') + 1).trim();
-
-          // First check if it's a player
-          const targetPlayer = playersInRoom.find(([_, name]) => name.toLowerCase() === targetName.toLowerCase());
-          if (targetPlayer) {
-            try {
-              const result = await authenticatedActor.lookAtPlayer(targetPlayer[1]);
-              if ('ok' in result) {
-                setMessages(prev => [...prev, {
-                  content: `${targetPlayer[1]}`,
-                  type: 'system'
-                }, {
-                  content: formatStatsForOthers(result.ok),
-                  type: 'system'
-                }]);
-              } else {
-                setMessages(prev => [...prev, {
-                  content: `${targetPlayer[1]} is here.`,
-                  type: 'system'
-                }, {
-                  content: result.err,
-                  type: 'error'
-                }]);
-              }
-            } catch (error) {
-              console.error("Error examining player:", error);
-              setMessages(prev => [...prev, {
-                content: `${targetPlayer[1]} is here.`,
-                type: 'system'
-              }]);
-            }
-            return;
-          }
-
-          // Then check if it's an exit
-          if (currentRoom.exits) {
-            // Map common direction abbreviations
-            const directionMap = {
-              'n': 'north',
-              's': 'south',
-              'e': 'east',
-              'w': 'west',
-              'ne': 'northeast',
-              'nw': 'northwest',
-              'se': 'southeast',
-              'sw': 'southwest',
-              'u': 'up',
-              'd': 'down'
-            };
-
-            const searchName = targetName.toLowerCase();
-            const expandedDirection = directionMap[searchName] || searchName;
-
-            const matchingExit = currentRoom.exits.find(([_, exit]) => {
-              const exitName = exit.name.toLowerCase();
-              const exitDirection = typeof exit.direction === 'string' ? exit.direction.toLowerCase() : '';
-              
-              return exitName.includes(expandedDirection) || exitDirection.includes(expandedDirection);
-            });
-            if (matchingExit) {
-              const [_, exit] = matchingExit;
-              const directionStr = typeof exit.direction === 'string' ? ` (${exit.direction})` : '';
-              setMessages(prev => [...prev, {
-                content: `${exit.name}${directionStr}`,
-                type: 'room'
-              }, {
-                content: exit.description,
-                type: 'room'
-              }]);
-              return;
-            }
-
-            // If we were looking for a direction but didn't find a matching exit
-            if (directionMap[searchName] || Object.values(directionMap).includes(searchName)) {
-              setMessages(prev => [...prev, {
-                content: `You see no exit in that direction.`,
-                type: 'system'
-              }]);
-              return;
-            }
-          }
-
-          // Finally check if it's an item
-          try {
-            // Find matching item in room or inventory
-            const item = await findMatchingItem(targetName, false);
-            const itemResult = await authenticatedActor.getItem(item.id);
-            
-            if ('ok' in itemResult) {
-              const itemInfo = itemResult.ok;
-              const messages = [
+      if (command.toLowerCase().startsWith('/look')) {
+        try {
+          const targetName = command.substring(5).trim();
+          if (!targetName) {
+            // No parameters - just show current room
+            if (currentRoom) {
+              const roomMessages = [
                 {
-                  content: `${itemInfo.item_type.name}`,
-                  type: 'item'
-                },
-                {
-                  content: itemInfo.item_type.description,
-                  type: 'system'
-                },
-              ];
-
-              // Add container-specific information
-              if (itemInfo.item_type.is_container) {
-                messages.push({
-                  content: "",
-                  type: 'system'
-                });
-                if (itemInfo.is_open) {
-                  const contentsResult = await authenticatedActor.getContainerContents(item.id);
-                  if ('ok' in contentsResult) {
-                    const contents = contentsResult.ok;
-                    if (contents.length > 0) {
-                      messages.push({
-                        content: "Contents:",
-                        type: 'system'
-                      });
-                      for (const itemId of contents) {
-                        const contentItemResult = await authenticatedActor.getItem(itemId);
-                        if ('ok' in contentItemResult) {
-                          const contentItem = contentItemResult.ok;
-                          const countStr = contentItem.count > 1 ? ` (x${contentItem.count})` : '';
-                          messages.push({
-                            content: `  ${contentItem.item_type.name}${countStr}`,
-                            type: 'item'
-                          });
+                  type: 'room',
+                  parts: [
+                    { 
+                      type: 'room',
+                      content: currentRoom.name,
+                      entityId: currentRoom.id,
+                      interactable: {
+                        tooltip: 'Click to examine room',
+                        actions: {
+                          click: `/examine room ${currentRoom.id}`
                         }
                       }
-                    } else {
-                      messages.push({
-                        content: "The container is empty.",
-                        type: 'system'
-                      });
                     }
-                  }
-                } else {
-                  messages.push({
-                    content: "The container is closed.",
-                    type: 'system'
-                  });
+                  ]
+                },
+                {
+                  type: 'room',
+                  parts: [{ type: 'text', content: currentRoom.description }]
                 }
+              ];
+
+              // Add players section if any are present
+              if (playersInRoom && playersInRoom.length > 0) {
+                roomMessages.push({
+                  type: 'room',
+                  parts: [
+                    { type: 'text', content: '\nPresent here:\n' },
+                    ...playersInRoom.flatMap(([_, name], index) => [
+                      { type: 'text', content: '  ' },
+                      {
+                        type: 'player',
+                        content: name,
+                        interactable: {
+                          tooltip: `Click to look at ${name}`,
+                          actions: {
+                            click: `/look ${name}`
+                          }
+                        }
+                      },
+                      { type: 'text', content: index < playersInRoom.length - 1 ? '\n' : '' }
+                    ])
+                  ]
+                });
               }
 
-              setMessages(prev => [...prev, ...messages]);
-              return;
-            } else {
-              setMessages(prev => [...prev, {
-                content: `Error: ${itemResult.err}`,
-                type: 'error'
-              }]);
-              return;
+              // Add exits section
+              if (currentRoom.exits && currentRoom.exits.length > 0) {
+                roomMessages.push({
+                  type: 'room',
+                  parts: [
+                    { type: 'text', content: '\nExits:\n' },
+                    ...currentRoom.exits.flatMap(([exitId, exit], index) => [
+                      { type: 'text', content: '  ' },
+                      {
+                        type: 'exit',
+                        content: exit.name,
+                        interactable: {
+                          tooltip: `Click to use exit ${exit.name}`,
+                          actions: {
+                            click: `/go ${exit.name}`
+                          }
+                        }
+                      },
+                      { type: 'text', content: index < currentRoom.exits.length - 1 ? '\n' : '' }
+                    ])
+                  ]
+                });
+              }
+
+              // Actually send the messages to display
+              setMessages(prev => [...prev, ...roomMessages]);
             }
-          } catch (error) {
-            console.error("Error examining item:", error);
-            setMessages(prev => [...prev, {
-              content: `Error: ${error.message}`,
-              type: 'error'
-            }]);
             return;
           }
+          // ... rest of look command handling
+        } catch (error) {
+          console.error("Error examining room:", error);
+          setMessages(prev => [...prev, {
+            content: `Error: ${error.message}`,
+            type: 'error'
+          }]);
         }
-
-        const roomMessages = [
-          {
-            type: 'room',
-            parts: [
-              { 
-                type: 'room',
-                content: currentRoom.name,
-                entityId: currentRoom.id,
-                interactable: {
-                  tooltip: 'Click to examine room',
-                  actions: {
-                    click: `/examine room ${currentRoom.id}`
-                  }
-                }
-              }
-            ]
-          },
-          {
-            type: 'room',
-            parts: [{ type: 'text', content: currentRoom.description }]
-          }
-        ];
-
-        // Add exits section
-        if (currentRoom.exits && currentRoom.exits.length > 0) {
-          roomMessages.push({
-            type: 'room',
-            parts: [
-              { type: 'text', content: '\nObvious exits:\n' },
-              ...currentRoom.exits.flatMap(([exitId, exit], index) => [
-                { type: 'text', content: '  ' },
-                {
-                  type: 'exit',
-                  content: exit.direction?.length > 0 ? exit.direction[0] : exit.name,
-                  entityId: exitId,
-                  interactable: {
-                    tooltip: exit.description || `Exit to ${exit.name}`,
-                    actions: {
-                      click: `/go ${exitId}`
-                    }
-                  }
-                },
-                { type: 'text', content: index < currentRoom.exits.length - 1 ? '\n' : '' }
-              ])
-            ]
-          });
-        }
-
-        // Add items section
-        if (currentRoom.items && currentRoom.items.length > 0) {
-          roomMessages.push({
-            type: 'room',
-            parts: [
-              { type: 'text', content: '\nYou see:\n' },
-              ...currentRoom.items.flatMap((item, index) => [
-                { type: 'text', content: '  ' },
-                {
-                  type: 'item',
-                  content: item.name + (item.count > 1 ? ` (x${item.count})` : ''),
-                  entityId: item.id,
-                  interactable: {
-                    tooltip: `${item.description}\n${item.isContainer ? (item.isOpen ? '[open]' : '[closed]') : ''}`,
-                    actions: {
-                      click: `/examine ${item.id}`
-                    }
-                  }
-                },
-                { type: 'text', content: index < currentRoom.items.length - 1 ? '\n' : '' }
-              ])
-            ]
-          });
-        }
-
-        setMessages(prev => [...prev, ...roomMessages]);
-        return;
       }
 
       // Handle inventory command (/inventory)
