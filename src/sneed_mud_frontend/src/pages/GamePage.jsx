@@ -2290,7 +2290,11 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
                   type: 'system'
                 },
                 ...players.map(p => ({
-                  content: `${p.name} (${p.characterClass})${p.status === 'Afk' ? p.afkMessage ? ': ' + p.afkMessage : '' : ''}`,
+                  content: `${p.name} (${p.characterClass}) - ${
+                    Object.hasOwn(p.status, 'Online') ? 'Online' : 
+                    Object.hasOwn(p.status, 'Afk') ? 'AFK' : 
+                    'Offline'
+                  }${Object.hasOwn(p.status, 'Afk') && p.afkMessage ? ': ' + p.afkMessage : ''}`,
                   type: 'system'
                 }))
               ]);
@@ -2314,6 +2318,7 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       if (command === '/players') {
         try {
           const result = await authenticatedActor.getAllPlayers();
+          console.log("Raw player data:", result.ok);  // Added this line
           if ('ok' in result) {
             const players = result.ok;
             if (players.length === 0) {
@@ -2329,7 +2334,11 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
                   type: 'system'
                 },
                 ...players.map(p => ({
-                  content: `${p.name} (${p.characterClass}) - ${p.status === 'Online' ? 'Online' : p.status === 'Afk' ? 'AFK' : 'Offline'}${p.status === 'Afk' && p.afkMessage ? ': ' + p.afkMessage : ''}`,
+                  content: `${p.name} (${p.characterClass}) - ${
+                    Object.hasOwn(p.status, 'Online') ? 'Online' : 
+                    Object.hasOwn(p.status, 'Afk') ? 'AFK' : 
+                    'Offline'
+                  }${Object.hasOwn(p.status, 'Afk') && p.afkMessage ? ': ' + p.afkMessage : ''}`,
                   type: 'system'
                 }))
               ]);

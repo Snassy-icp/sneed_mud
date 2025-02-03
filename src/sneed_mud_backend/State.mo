@@ -301,6 +301,7 @@ module {
     let now = Time.now();
     Debug.print("Current time: " # Int.toText(now));
 
+    // First check activity timestamp
     switch (state.playerLastActivity.get(principal)) {
       case null { 
         Debug.print("No activity record - treating as offline");
@@ -315,22 +316,14 @@ module {
         
         if (elapsed >= state.afkConfig.offline_timeout_ns) { 
           Debug.print("Elapsed >= offline threshold - marking as offline");
-          #Offline;
+          #Offline
         } else if (elapsed >= state.afkConfig.afk_timeout_ns) {
           Debug.print("Elapsed >= AFK threshold - marking as AFK");
-          #Afk;
+          #Afk
         } else {
-          Debug.print("Within active thresholds - checking stored status");
-          switch (state.playerStatus.get(principal)) {
-            case (?status) { 
-              Debug.print("Using stored status: " # debug_show(status));
-              status 
-            };
-            case null { 
-              Debug.print("No stored status - defaulting to Online");
-              #Online 
-            };
-          };
+          // Within active thresholds - they're online
+          Debug.print("Within active thresholds - marking as online");
+          #Online
         };
       };
     };
@@ -391,7 +384,12 @@ module {
     let now = Time.now();
     Debug.print("Updating activity for " # Principal.toText(principal));
     Debug.print("Time now: " # Int.toText(now));
+    
+    // Update activity timestamp
     state.playerLastActivity.put(principal, now);
+    
+    // Always set status to Online when there's activity
+    setPlayerStatus(state, principal, #Online);
     
     // If player was offline and is now coming online, broadcast login message
     if (oldStatus == #Offline) {
@@ -401,14 +399,6 @@ module {
         };
         case _ {};
       };
-    };
-    
-    // Auto-return from AFK when there's activity
-    switch (oldStatus) {
-      case (#Afk) { 
-        setPlayerStatus(state, principal, #Online);
-      };
-      case _ {};
     };
   };
 
