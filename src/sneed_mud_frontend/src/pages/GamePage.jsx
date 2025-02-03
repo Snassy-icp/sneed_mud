@@ -276,8 +276,12 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
 
   useEffect(() => {
     if (isAuthenticated && authenticatedActor && playerName) {
+      // Initial room update and activity update
       updateCurrentRoom();
+      authenticatedActor.getCurrentRoom(); // This will trigger updatePlayerActivity in the backend
       fetchMessages();
+
+      // Set up intervals
       const roomInterval = setInterval(updateCurrentRoom, 5000);
       return () => clearInterval(roomInterval);
     }

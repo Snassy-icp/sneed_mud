@@ -185,8 +185,8 @@ module {
       metadataCache = metadataCache;
       playerLastActivity = HashMap.HashMap<Principal, Int>(10, Principal.equal, Principal.hash);
       var afkConfig = {
-        afk_timeout_ns = 20 * 60 * 1_000_000_000;
-        offline_timeout_ns = 60 * 60 * 1_000_000_000;
+        afk_timeout_ns = 20 * 60 * 1_000_000_000;  // 20 minutes for AFK
+        offline_timeout_ns = 60 * 60 * 1_000_000_000;  // 60 minutes for offline
       };
       playerCombatStates = HashMap.HashMap<Principal, Types.CombatState>(10, Principal.equal, Principal.hash);
       characterClasses = characterClasses;
@@ -297,24 +297,40 @@ module {
 
   // Get current status, considering both stored status and activity timestamps
   public func getPlayerStatus(state: MudState, principal: Principal) : Types.PlayerStatus {
-    switch (state.playerLastActivity.get(principal)) {
-      case null { #Offline };
-      case (?lastActivity) {
-        let elapsed = Time.now() - lastActivity;
-        
-        // Check timestamps first
-        if (elapsed >= state.afkConfig.offline_timeout_ns) { 
-          return #Offline;
-        };
-        
-        if (elapsed >= state.afkConfig.afk_timeout_ns) {
-          return #Afk;
-        };
+    Debug.print("Checking status for " # Principal.toText(principal));
+    let now = Time.now();
+    Debug.print("Current time: " # Int.toText(now));
 
-        // If within timeouts, return stored status or default to Online
-        switch (state.playerStatus.get(principal)) {
-          case (?status) { status };
-          case null { #Online };
+    switch (state.playerLastActivity.get(principal)) {
+      case null { 
+        Debug.print("No activity record - treating as offline");
+        #Offline 
+      };
+      case (?lastActivity) {
+        let elapsed = now - lastActivity;
+        Debug.print("Last activity: " # Int.toText(lastActivity));
+        Debug.print("Elapsed time: " # Int.toText(elapsed));
+        Debug.print("Offline threshold: " # Int.toText(state.afkConfig.offline_timeout_ns));
+        Debug.print("AFK threshold: " # Int.toText(state.afkConfig.afk_timeout_ns));
+        
+        if (elapsed >= state.afkConfig.offline_timeout_ns) { 
+          Debug.print("Elapsed >= offline threshold - marking as offline");
+          #Offline;
+        } else if (elapsed >= state.afkConfig.afk_timeout_ns) {
+          Debug.print("Elapsed >= AFK threshold - marking as AFK");
+          #Afk;
+        } else {
+          Debug.print("Within active thresholds - checking stored status");
+          switch (state.playerStatus.get(principal)) {
+            case (?status) { 
+              Debug.print("Using stored status: " # debug_show(status));
+              status 
+            };
+            case null { 
+              Debug.print("No stored status - defaulting to Online");
+              #Online 
+            };
+          };
         };
       };
     };
@@ -372,7 +388,10 @@ module {
   // Update player activity and handle status changes
   public func updatePlayerActivity(state: MudState, principal: Principal) {
     let oldStatus = getPlayerStatus(state, principal);
-    state.playerLastActivity.put(principal, Time.now());
+    let now = Time.now();
+    Debug.print("Updating activity for " # Principal.toText(principal));
+    Debug.print("Time now: " # Int.toText(now));
+    state.playerLastActivity.put(principal, now);
     
     // If player was offline and is now coming online, broadcast login message
     if (oldStatus == #Offline) {

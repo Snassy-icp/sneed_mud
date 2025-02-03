@@ -665,7 +665,7 @@ actor class MudBackend() = this {
     #ok(Buffer.toArray(onlinePlayers))
   };
 
-  public query(msg) func getAllPlayers() : async Result.Result<[Types.PlayerInfo], Text> {
+  public shared(msg) func getAllPlayers() : async Result.Result<[Types.PlayerInfo], Text> {
     let allPlayers = Buffer.Buffer<Types.PlayerInfo>(0);
     
     for ((principal, name) in state.players.entries()) {
@@ -700,7 +700,7 @@ actor class MudBackend() = this {
         name = name;
         characterClass = className;
         status = status;
-        afkMessage = null;  // We'll implement AFK messages later if needed
+        afkMessage = null;
       });
     };
     
