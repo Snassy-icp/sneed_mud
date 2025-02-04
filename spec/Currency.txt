@@ -1,0 +1,149 @@
+Currency System Specification
+===========================
+
+1. Overview
+-----------
+The currency system in SNEED MUD provides a medium of exchange for trading with NPCs and between players.
+
+2. Key Components
+----------------
+- Currency Units
+- Currency Operations
+- Trading System Integration
+- Currency Drops
+
+3. Detailed Mechanics
+--------------------
+Currency Properties:
+- Currency is stored as a non-negative integer value
+- All transactions must maintain non-negative balances
+- Currency is account-bound (non-transferable between players for now)
+- Currency persists across sessions and deaths
+
+Currency Sources:
+- NPC kills (random drops)
+- Selling items to NPC vendors
+- Quest rewards (future feature)
+
+Currency Sinks:
+- Purchasing items from NPC vendors
+- Service fees (future feature)
+
+4. Constants & Formulas
+----------------------
+Currency Name: "Gold"
+Minimum Transaction: 1 Gold
+Maximum Currency Cap: 1,000,000 Gold (1M)
+
+Drop Calculations:
+- Base drop range for NPCs based on level
+- Formula: Base Drop = (NPC Level * 5) + Random(1-10)
+
+5. Edge Cases & Restrictions
+--------------------------
+- Cannot have negative currency
+- Cannot exceed maximum currency cap
+- Failed purchases return currency to player
+- Currency operations must be atomic
+- All currency operations must be logged for auditing 
+
+Implementation Plan
+------------------
+1. Core Currency State (Phase 1):
+   - Add Currency type to player state
+   ```motoko
+   public type Currency = {
+       var amount: Nat;
+       var last_transaction: ?Transaction;
+   };
+   ```
+   - Implement basic currency operations:
+     * addGold(player_id: Principal, amount: Nat)
+     * removeGold(player_id: Principal, amount: Nat)
+     * getBalance(player_id: Principal) -> Nat
+   - Add transaction logging for audit trail
+   - Implement max currency cap checks
+
+2. Transaction System (Phase 1):
+   - Create Transaction type for tracking
+   ```motoko
+   public type Transaction = {
+       id: Text;
+       timestamp: Time.Time;
+       player_id: Principal;
+       amount: Int;  // Positive for additions, negative for removals
+       reason: Text;
+       success: Bool;
+   };
+   ```
+   - Implement atomic transaction handling
+   - Add transaction history tracking
+   - Add validation checks (non-negative balance, cap limits)
+
+3. Player Commands (Phase 1):
+   - /balance: Show current gold
+   - /transactions [count]: Show recent transactions
+   - Error message handling for all operations
+
+4. NPC Integration (Phase 2):
+   - Implement currency drops from NPCs
+   - Add drop calculation formulas
+   - Integrate with combat system for automatic drops
+   - Add NPC rank multipliers to drops
+
+5. Trading System Integration (Phase 2):
+   - Add currency validation to trade operations
+   - Implement atomic buy/sell transactions
+   - Add price checks and validations
+   - Integrate with NPC trading system
+
+6. Quest Integration (Phase 3):
+   - Add currency rewards to quest system
+   - Implement quest reward transactions
+   - Add validation for quest reward limits
+
+Testing Plan:
+1. Unit Tests (Phase 1):
+   - Basic currency operations
+   - Transaction atomicity
+   - Cap enforcement
+   - Balance calculations
+   - Error conditions
+
+2. Integration Tests (Phase 2):
+   - NPC drops
+   - Trading operations
+   - Multi-user transactions
+   - Race condition testing
+
+3. System Tests (Phase 3):
+   - Quest reward integration
+   - Full gameplay scenarios
+   - Performance testing
+   - Load testing
+
+Deployment Strategy:
+1. Phase 1 - Core System:
+   - Deploy basic currency operations
+   - Enable player commands
+   - Monitor for any issues
+   - Gather initial feedback
+
+2. Phase 2 - NPC & Trading:
+   - Deploy NPC currency drops
+   - Enable trading system
+   - Monitor economic balance
+   - Adjust drop rates if needed
+
+3. Phase 3 - Quest Integration:
+   - Deploy quest reward system
+   - Monitor overall economy
+   - Make balance adjustments
+   - Fine-tune reward scales
+
+Monitoring & Maintenance:
+- Track total currency in system
+- Monitor transaction volumes
+- Watch for unusual patterns
+- Regular economic health checks
+- Periodic balance adjustments 

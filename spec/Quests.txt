@@ -1,0 +1,225 @@
+Quest System Specification
+=======================
+
+1. Overview
+-----------
+The quest system in SNEED MUD provides structured objectives for players to complete, with associated rewards. Quests are primarily given by NPCs and track player progress towards specific goals. Each quest can have multiple objectives of different types.
+
+2. Key Components
+----------------
+- Quest Structure
+- Objective Types & Tracking
+- Reward System
+- Quest State Management
+- NPC Integration
+
+3. Detailed Mechanics
+--------------------
+Quest Properties:
+- Unique identifier
+- Name
+- Description
+- Required level (if any)
+- Prerequisites (other quests that must be completed)
+- List of objectives (multiple objectives of any type)
+- Rewards
+- NPC giver ID
+- Quest state (available/active/completed)
+
+Objective Types:
+1. Collection Objective:
+   - Gather specific items
+   - Items are removed on quest completion
+   - Format: "Collect [quantity] [item_name]"
+   - Progress: Counts matching items in inventory
+
+2. Kill Objective:
+   - Defeat specific NPCs
+   - Tracks kills during quest active state
+   - Format: "Kill [quantity] [npc_name]"
+   - Progress: Counts kills of matching NPCs
+
+3. Delivery Objective:
+   - Take items to specific NPCs
+   - Items can be from collection or given
+   - Format: "Deliver [item_name] to [npc_name]"
+   - Progress: Checks for item possession and turn-in
+
+4. Interaction Objective:
+   - Talk to specific NPCs
+   - Visit specific rooms
+   - Format: "Speak with [npc_name]"
+   - Progress: Records NPC conversations/room visits
+
+Quest Commands:
+- /quest: Show quest log
+- /quest info <quest_id>: Show detailed quest information
+- /quest abandon <quest_id>: Abandon an active quest
+- /quest track <quest_id>: Set as active tracked quest
+
+Quest Creation:
+- Command: /create_quest
+- Format: JSON structure defining quest properties
+```
+{
+    "name": "string",
+    "description": "string",
+    "level_req": number | null,
+    "prerequisites": [quest_id] | null,
+    "npc_giver": npc_id,
+    "objectives": [
+        {
+            "type": "collection" | "kill" | "delivery" | "interaction",
+            "target": item_id | npc_id | room_id,
+            "quantity": number,
+            "description": "string"
+        }
+    ],
+    "rewards": {
+        "xp": number,
+        "gold": number,
+        "items": [
+            {
+                "item_type_id": string,
+                "quantity": number
+            }
+        ]
+    }
+}
+```
+
+Example Quest Creation:
+```
+/create_quest {
+    "name": "Wolf Hunter",
+    "description": "The village is troubled by wolves. Help thin their numbers.",
+    "level_req": 1,
+    "prerequisites": null,
+    "npc_giver": "village_elder",
+    "objectives": [
+        {
+            "type": "kill",
+            "target": "wolf",
+            "quantity": 5,
+            "description": "Kill wolves"
+        },
+        {
+            "type": "collection",
+            "target": "wolf_pelt",
+            "quantity": 3,
+            "description": "Collect wolf pelts"
+        }
+    ],
+    "rewards": {
+        "xp": 100,
+        "gold": 50,
+        "items": [
+            {
+                "item_type_id": "hunter_boots",
+                "quantity": 1
+            }
+        ]
+    }
+}
+```
+
+Quest States:
+1. Available:
+   - Meets level requirement
+   - Prerequisites completed
+   - Not yet accepted
+
+2. Active:
+   - Accepted by player
+   - All objectives being tracked
+   - Can be abandoned
+
+3. Completed:
+   - All objectives fulfilled
+   - Rewards claimed
+   - Cannot be repeated (unless specified)
+
+Progress Tracking:
+- Each objective tracks independently
+- Quest completion requires all objectives complete
+- Objectives can be completed in any order
+- Some objectives may depend on others (e.g., collect before deliver)
+- Progress persists through death/logout
+- Progress only tracks while quest is active
+
+Reward System:
+1. Reward Types:
+   - Experience points
+   - Gold
+   - Items
+   - Reputation (future feature)
+
+2. Reward Format:
+   - XP: Fixed amount
+   - Gold: Fixed amount
+   - Items: List of item_type_ids and quantities
+   - Special rewards (unique items, abilities)
+
+4. Constants & Formulas
+----------------------
+Quest Limits:
+- Maximum active quests: 20
+- Maximum daily repeatable quests: 5
+- Minimum level for quests: 1
+- Maximum quest reward gold: 100,000
+
+Experience Rewards:
+- Base XP = Quest Level * 100
+- Elite quest multiplier: 2x
+- Boss quest multiplier: 3x
+
+5. Edge Cases & Restrictions
+--------------------------
+- Cannot accept quest if inventory full
+- Cannot accept if prerequisites not met
+- Cannot accept if level requirement not met
+- Cannot abandon quest during critical objectives
+- Quest items cannot be traded/sold
+- Quest progress resets on abandon
+- Cannot accept already completed quest
+- Cannot have duplicate active quests
+- Quest state persists through death/logout
+- Quest progress only counts while quest is active
+
+6. Quest Log Format
+------------------
+Main Quest Log:
+```
+Active Quests:
+1. [quest_name]
+   - [objective_1_description] ([progress]/[total])
+   - [objective_2_description] ([progress]/[total])
+2. [quest_name] (All objectives complete - Ready to turn in)
+
+Available Quests:
+[!] [quest_name] (Level [req_level])
+[!] [quest_name] (Requires: [prereq_quest])
+
+Completed Quests:
+- [quest_name]
+```
+
+Detailed Quest View:
+```
+[quest_name]
+Level [level] quest from [npc_name]
+
+Description:
+[quest_description]
+
+Objectives:
+1. [objective_1_description] ([progress]/[required])
+   Status: [In Progress/Complete]
+2. [objective_2_description] ([progress]/[required])
+   Status: [In Progress/Complete]
+
+Rewards:
+- [xp] experience
+- [gold] gold
+- [item_name] x[quantity]
+``` 

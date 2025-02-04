@@ -1,0 +1,190 @@
+NPC System Specification
+=====================
+
+1. Overview
+-----------
+NPCs (Non-Player Characters) in SNEED MUD are computer-controlled entities that can interact with players through combat, trading, and dialogue. They follow similar rules to players but with additional specialized behaviors.
+
+2. Key Components
+----------------
+- NPC Creation & Management
+- NPC States & Persistence
+- Combat Integration
+- Trading System
+- Loot System
+- Respawn Mechanics
+
+3. Detailed Mechanics
+--------------------
+NPC Properties:
+- Unique identifier
+- Name
+- Level
+- Room ID (location)
+- Rank (normal/elite/boss)
+- Respawn timer
+- Trading capability
+- Inventory
+- Loot table
+
+Basic Commands:
+- /create_npc: Creates a new NPC instance
+- /talk: Initiates dialogue with NPC
+- /reply <response_number>: Select dialogue option
+- /quest: Show active quests from current NPC
+- /trade: Lists NPC's available trades
+- /buy <item_id> [quantity]: Purchase items from NPC
+- /sell <item_id> [quantity]: Sell items to NPC
+- Standard combat commands apply (/attack, etc.)
+
+Trading System:
+- NPCs can both buy and sell items
+- Fixed prices for all transactions
+- NPCs have unlimited capacity to mint items
+- All transactions use the Gold currency system
+- Item types include vendor sell price property
+
+Trading Commands & Flow:
+1. Trade Information:
+   - /trade: Shows available trades with format:
+     * "Buy: [item_id] [name] [buy_price]g (stock: unlimited)"
+     * "Sell: [item_id] [name] [sell_price]g"
+   - /look <item_id>: Shows detailed item information including:
+     * Buy price (if NPC sells it)
+     * Sell price (if NPC buys it)
+     * Item properties
+
+2. Buy Process:
+   - Command: /buy <item_id> [quantity]
+   - Default quantity is 1 if omitted
+   - System verifies player has sufficient gold
+   - Items are minted and added to player inventory
+   - Gold is deducted from player
+   - Transaction is atomic (all or nothing)
+   - System responds with confirmation message
+
+3. Sell Process:
+   - Command: /sell <item_id> [quantity]
+   - Default quantity is 1 if omitted
+   - System verifies player has items
+   - Items are removed from player inventory
+   - Gold is added to player
+   - Transaction is atomic (all or nothing)
+   - System responds with confirmation message
+
+4. System Messages:
+   - Success: "Bought [quantity] [item_name] for [total]g"
+   - Success: "Sold [quantity] [item_name] for [total]g"
+   - Error: "Insufficient gold (need [amount]g)"
+   - Error: "Insufficient items (have [amount])"
+   - Error: "Cannot trade while in combat"
+   - Error: "Cannot trade equipped items"
+   - Error: "Invalid item ID"
+   - Error: "NPC does not trade this item"
+
+5. Trade Restrictions:
+   - Cannot trade while in combat
+   - Cannot trade with dead NPCs
+   - Cannot trade items that are equipped
+   - Cannot exceed player's inventory capacity
+   - Cannot exceed maximum gold cap
+   - Must be in same room as NPC
+
+Combat Integration:
+- Follows standard combat rules from Combat.txt
+- Uses same XP formula as player kills
+- Drops loot and currency on death
+- Respawns after configured timer expires
+
+Loot System:
+- Each NPC has a defined loot table
+- Loot table entries contain:
+  * Item type ID
+  * Drop chance (percentage)
+  * Quantity range
+- Currency drops defined by formula in Currency.txt
+- Multiple items can drop from single kill
+- Loot is automatically generated on NPC death
+
+Dialogue System:
+1. Basic Dialogue:
+   - /talk: Initiates or continues dialogue with NPC in same room
+   - System displays:
+     * NPC's current dialogue text
+     * Numbered list of possible responses
+     * Special markers for quest-related options ([!] new quest, [?] quest update)
+   - /reply <number>: Select response option
+   - Dialogue state persists until player leaves room
+
+2. Dialogue Format:
+   - NPC Text: "[NPC_Name] says: [dialogue_text]"
+   - Options Format:
+     * "[number]) [response_text]"
+     * "[number]) [!] [quest_name]" (new quest)
+     * "[number]) [?] [quest_name]" (quest update/turn-in)
+   - Error: "That's not a valid response"
+   - Error: "[NPC_Name] is too far away"
+
+3. Quest Integration:
+   - /quest: Shows all quests from current NPC
+     * Active quests with progress
+     * Completed quests
+     * Available new quests
+   - Quest Status Format:
+     * "[quest_name]: [current_objective] ([progress]/[required])"
+     * "[quest_name]: Complete"
+     * "[!] [quest_name]: Available"
+
+4. Quest Dialogue Flow:
+   - New Quest:
+     * Shows quest details
+     * Displays accept/decline options
+     * Records quest in player's quest log if accepted
+   - Quest Update:
+     * Shows current progress
+     * Option to turn in if complete
+     * Rewards given on turn-in
+   - Quest Completion:
+     * Confirms quest completion
+     * Lists rewards given
+     * Updates quest state
+
+5. Dialogue Restrictions:
+   - Must be in same room as NPC
+   - Cannot talk to dead NPCs
+   - Cannot talk while in combat
+   - Quest dialogues require active or available quest
+   - Quest turn-ins require meeting completion criteria
+
+4. Constants & Formulas
+----------------------
+Ranks & Multipliers:
+- Normal: 
+  * Base stats
+  * Base XP
+  * Base currency drops
+- Elite: 
+  * 2x health
+  * 1.5x damage
+  * 2x XP reward
+  * 2x currency drops
+- Boss: 
+  * 3x health
+  * 2x damage
+  * 3x XP reward
+  * 3x currency drops
+
+Default Values:
+- Base Respawn Timer: 300 seconds (5 minutes)
+- Minimum Level: 1
+- Maximum Level: 50
+
+5. Edge Cases & Restrictions
+--------------------------
+- NPCs cannot leave their assigned room
+- NPCs persist state across server restarts
+- NPCs respawn with full inventory
+- Cannot create NPCs in non-existent rooms
+- Cannot create NPCs with invalid properties
+- NPCs cannot trade while in combat
+- Dead NPCs cannot perform any actions 
