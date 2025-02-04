@@ -887,6 +887,7 @@ module {
           hp = baseStats.maxHp;
           mp = baseStats.maxMp;
           xp = 0;
+          gold = 0;  // Players start with no gold
           isDead = false;
           deathTime = null;
           xpPenaltyEndTime = null;
@@ -1003,6 +1004,7 @@ module {
             hp = updatedBaseStats.maxHp;
             mp = updatedBaseStats.maxMp;
             xp = dynamicStats.xp;
+            gold = dynamicStats.gold;
             isDead = dynamicStats.isDead;
             deathTime = dynamicStats.deathTime;
             xpPenaltyEndTime = dynamicStats.xpPenaltyEndTime;
@@ -1094,6 +1096,7 @@ module {
           hp = baseStats.maxHp;
           mp = baseStats.maxMp;
           xp = 0;
+          gold = 0;  // Players start with no gold
           isDead = false;
           deathTime = null;
           xpPenaltyEndTime = null;

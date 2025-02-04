@@ -107,6 +107,7 @@ module {
     hp: Nat;
     mp: Nat;
     xp: Nat;
+    gold: Nat;  // Player's current gold amount
     isDead: Bool;
     deathTime: ?Int;
     xpPenaltyEndTime: ?Int;  // When null, no XP penalty is active
