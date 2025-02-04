@@ -110,7 +110,13 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
     autoAttackTimerRef.current = setInterval(async () => {
       try {
         const result = await authenticatedActor.attack(targetName);
-        // Don't stop on errors - let combat continue
+        if ('err' in result) {
+          // Only stop on fatal errors (target gone, wrong room, etc)
+          // Ignore cooldown errors - the timer will try again
+          if (!result.err.includes("cooldown")) {
+            stopAutoAttack();
+          }
+        }
       } catch (error) {
         // Only stop on critical errors (like network failures)
         console.error("Auto-attack error:", error);
