@@ -19,6 +19,14 @@ This document lists the core technical assumptions that inform the design of all
 - IC handles all command queuing and state transaction management natively
 - Frontend maintains a query loop for state updates, but cannot drive backend "ticks"
 
+Frontend Timer Exception
+----------------------
+While the backend cannot maintain timers, the frontend may implement UI convenience timers that:
+- Help automate repetitive user actions
+- Must respect all backend cooldowns and restrictions
+- Cannot bypass or modify backend state management
+- Must be implemented purely as UI assistance features
+
 3. Data Formatting and Display Principles
 ---------------------------------------
 - Backend sends only structured data, never pre-formatted strings

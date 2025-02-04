@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Principal } from '@dfinity/principal';
 import TextLog from '../components/game/TextLog';
@@ -24,6 +24,8 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
   const [pendingTransfer, setPendingTransfer] = useState(null);
   const [walletPreferences, setWalletPreferences] = useState(() => getWalletPreferences());
   const [authClient, setAuthClient] = useState(null);
+  const [autoAttackTarget, setAutoAttackTarget] = useState(null);
+  const autoAttackTimerRef = useRef(null);
 
   // Initialize auth client
   useEffect(() => {
@@ -31,6 +33,91 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       setAuthClient(client);
     });
   }, []);
+
+  // Add cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoAttackTimerRef.current) {
+        clearInterval(autoAttackTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Add room change detection to stop auto-attack
+  useEffect(() => {
+    if (currentRoom && autoAttackTarget) {
+      const targetInRoom = playersInRoom.some(([_, name]) => name === autoAttackTarget);
+      if (!targetInRoom) {
+        stopAutoAttack();
+      }
+    }
+  }, [currentRoom, playersInRoom]);
+
+  const stopAutoAttack = () => {
+    if (autoAttackTimerRef.current) {
+      clearInterval(autoAttackTimerRef.current);
+      autoAttackTimerRef.current = null;
+      setAutoAttackTarget(null);
+      setMessages(prev => [...prev, {
+        content: "Stopped auto-attack",
+        type: 'system'
+      }]);
+    }
+  };
+
+  const startAutoAttack = async (targetName) => {
+    // Clear any existing auto-attack
+    stopAutoAttack();
+
+    // Start new auto-attack
+    setAutoAttackTarget(targetName);
+    
+    // Get player stats to determine attack speed
+    const statsResult = await authenticatedActor.getStats();
+    if ('err' in statsResult) {
+      setMessages(prev => [...prev, {
+        content: `Error getting player stats: ${statsResult.err}`,
+        type: 'error'
+      }]);
+      stopAutoAttack();
+      return;
+    }
+    
+    // Calculate cooldown based on base cooldown (5s) and attack speed
+    // Attack speed is stored as percentage * 100, so 10000 = 100%
+    const BASE_COOLDOWN_MS = 5000;
+    const attackSpeedPercent = Number(statsResult.ok.base.attackSpeed) / 10000;
+    const cooldownMs = Math.floor(BASE_COOLDOWN_MS / attackSpeedPercent) + 100; // Add 100ms buffer
+    
+    // Initial attack
+    const result = await authenticatedActor.attack(targetName);
+    if ('err' in result) {
+      setMessages(prev => [...prev, {
+        content: `Error: ${result.err}`,
+        type: 'error'
+      }]);
+      stopAutoAttack();
+      return;
+    }
+
+    // Notify user that auto-attack started
+    setMessages(prev => [...prev, {
+      content: `Auto-attacking ${targetName}. Type /attack ${targetName} again or /stop to cancel.`,
+      type: 'system'
+    }]);
+
+    // Set up timer for subsequent attacks using actual cooldown
+    autoAttackTimerRef.current = setInterval(async () => {
+      try {
+        const result = await authenticatedActor.attack(targetName);
+        // Don't stop on errors - let combat continue
+      } catch (error) {
+        // Only stop on critical errors (like network failures)
+        console.error("Auto-attack error:", error);
+        stopAutoAttack();
+      }
+    }, cooldownMs);
+  };
 
   // Helper functions
   function createItemSubaccount(itemId) {
@@ -622,7 +709,11 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             type: 'system'
           },
           {
-            content: "  /attack <player> - Attack another player in the same room",
+            content: "  /attack <player> - Attack another player in the same room (use twice to toggle auto-attack)",
+            type: 'system'
+          },
+          {
+            content: "  /stop - Stop auto-attacking",
             type: 'system'
           },
           {
@@ -808,22 +899,15 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
       // Handle attack command
       if (command.toLowerCase().startsWith('/attack ')) {
         const targetName = command.substring(command.indexOf(' ') + 1).trim();
-        try {
-          const result = await authenticatedActor.attack(targetName);
-          if ('err' in result) {
-            setMessages(prev => [...prev, {
-              content: `Error: ${result.err}`,
-              type: 'error'
-            }]);
-          }
-          // Success message comes from backend via message polling
-        } catch (error) {
-          console.error("Error attacking:", error);
-          setMessages(prev => [...prev, {
-            content: `Error: ${error.message}`,
-            type: 'error'
-          }]);
+        
+        // If already auto-attacking this target, stop
+        if (autoAttackTarget === targetName) {
+          stopAutoAttack();
+          return;
         }
+
+        // Start auto-attack
+        await startAutoAttack(targetName);
         return;
       }
 
@@ -2234,6 +2318,12 @@ function GamePage({ isAuthenticated, playerName, authenticatedActor, principal }
             type: 'error'
           }]);
         }
+        return;
+      }
+
+      // Handle stop command
+      if (command === '/stop') {
+        stopAutoAttack();
         return;
       }
 

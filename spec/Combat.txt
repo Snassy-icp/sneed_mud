@@ -20,6 +20,18 @@ Combat State:
 - Combat state lasts 20 seconds from the last combat action
 - Players must wait 5 seconds between attacks (cooldown)
 
+Frontend Auto-Attack Feature:
+- The UI can assist players by automating attack commands
+- Initiated by /attack command, creates a UI timer matching attack cooldown
+- Automatically sends subsequent /attack commands when cooldown expires
+- Stops automatically if:
+  * Player uses /stop command
+  * Player moves to different room
+  * Target dies or leaves room
+  * Any attack command fails (excluding normal combat misses/glancing blows)
+- Must fully respect all backend cooldowns and combat rules
+- Purely a UI convenience feature with no backend state
+
 Attack Process:
 - Attacker and target must be in the same room
 - System verifies attacker can perform combat actions
